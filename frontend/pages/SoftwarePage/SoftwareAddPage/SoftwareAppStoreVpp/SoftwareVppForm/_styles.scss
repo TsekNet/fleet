@@ -48,6 +48,10 @@
     }
   }
 
+  &__target {
+    width: 100%;
+  }
+
   @media (min-width: $break-md) {
     &__form-frame {
       flex-direction: row;
@@ -102,6 +106,7 @@
   // button styles
   &__action-buttons {
     display: flex;
+    flex-direction: row-reverse;
     gap: $pad-medium;
   }
 }
