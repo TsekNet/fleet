@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/fleetdm/fleet/v4/server/config"
 	"github.com/fleetdm/fleet/v4/server/contexts/ctxerr"
 	"github.com/fleetdm/fleet/v4/server/contexts/logging"
@@ -850,7 +851,7 @@ SELECT
   '' AS vendor,
   0 AS last_opened_at,
   path AS installed_path
-FROM python_packages
+FROM ` + osqueryVersionGreaterThanEqual("5.16.0", "cached_users CROSS JOIN python_packages USING (uid)", "python_packages") + `
 UNION
 SELECT
   name AS name,
@@ -1036,8 +1037,8 @@ SELECT
   '' AS vendor,
   '' AS arch,
   path AS installed_path
-FROM python_packages;
-`),
+FROM ` + osqueryVersionGreaterThanEqual("5.16.0", "cached_users CROSS JOIN python_packages USING (uid)", "python_packages"),
+	),
 	Platforms:        fleet.HostLinuxOSs,
 	DirectIngestFunc: directIngestSoftware,
 }
@@ -1062,7 +1063,7 @@ SELECT
   'python_packages' AS source,
   '' AS vendor,
   path AS installed_path
-FROM python_packages
+FROM ` + osqueryVersionGreaterThanEqual("5.16.0", "cached_users CROSS JOIN python_packages USING (uid)", "python_packages") + `
 UNION
 SELECT
   name AS name,
@@ -2375,4 +2376,24 @@ func directIngestWindowsProfiles(
 		return ctxerr.Errorf(ctx, "directIngestWindowsProfiles host %s got an empty SyncML response", host.UUID)
 	}
 	return microsoft_mdm.VerifyHostMDMProfiles(ctx, logger, ds, host, rawResponse)
+}
+
+// osqueryVersionGreaterThanEqual returns the second parameter if the current version is greater than or equal to the
+// version provided. Otherwise, it returns the third parameter. If there is an error it returns the false string case.
+func osqueryVersionGreaterThanEqual(version, iftrue, iffalse string) string {
+	currentVersion, err := semver.NewVersion(fleet.OsqueryVersion)
+	if err != nil {
+		return iffalse
+	}
+
+	compareVersion, err := semver.NewVersion(version)
+	if err != nil {
+		return iffalse
+	}
+
+	if currentVersion.Compare(compareVersion) >= 0 {
+		return iftrue
+	}
+
+	return iffalse
 }

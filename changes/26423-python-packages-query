@@ -1,0 +1,1 @@
+* Updated osquery query on python_packages table to make use of new functionality to search user directories for python packages.

@@ -36,6 +36,8 @@ var (
 // "tools/osquery-agent-options/main.go" and run "cd server/fleet/ && go generate".
 package fleet
 
+var OsqueryVersion string = "{{ .OsqueryVersion }}"
+
 type osqueryOptions struct { {{ range $name, $type := .Options }}
 	{{camelCase $name}} {{$type}} ` + "`json:\"{{$name}}\"`" + `{{end}}
 

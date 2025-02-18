@@ -3,6 +3,8 @@
 // "tools/osquery-agent-options/main.go" and run "cd server/fleet/ && go generate".
 package fleet
 
+var OsqueryVersion string = "5.14.1"
+
 type osqueryOptions struct { 
 	AuditAllowConfig bool `json:"audit_allow_config"`
 	AuditAllowFimEvents bool `json:"audit_allow_fim_events"`

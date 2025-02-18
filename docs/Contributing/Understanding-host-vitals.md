@@ -579,7 +579,7 @@ SELECT
   '' AS vendor,
   '' AS arch,
   path AS installed_path
-FROM python_packages;
+FROM python_packages
 ```
 
 ## software_macos
