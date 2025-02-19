@@ -11,7 +11,7 @@ import CustomLink from "components/CustomLink";
 import Radio from "components/forms/fields/Radio";
 import Button from "components/buttons/Button";
 import FileDetails from "components/FileDetails";
-import Checkbox from "components/forms/fields/Checkbox";
+import SoftwareOptionsSelector from "components/SoftwareOptionsSelector";
 import TargetLabelSelector from "components/TargetLabelSelector";
 import SoftwareIcon from "pages/SoftwarePage/components/icons/SoftwareIcon";
 import {
@@ -23,7 +23,6 @@ import {
 } from "pages/SoftwarePage/helpers";
 
 import { generateFormValidation, getUniqueAppId } from "./helpers";
-import SoftwareOptionsSelector from "components/SoftwareOptionsSelector";
 
 const baseClass = "software-vpp-form";
 
@@ -160,6 +159,10 @@ const SoftwareVppForm = ({
           app.platform === "ios" || app.platform === "ipados"
             ? false
             : formData.selfService,
+        automaticInstall:
+          app.platform === "ios" || app.platform === "ipados"
+            ? false
+            : formData.automaticInstall,
       };
       setFormData(newFormData);
       setFormValidation(generateFormValidation(newFormData));
