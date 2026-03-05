@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -40,69 +39,6 @@ func TestLoadJSON(t *testing.T) {
 	}
 }
 
-func TestApplyDefaults(t *testing.T) {
-	t.Parallel()
-
-	cfg := &Config{Heading: "Test"}
-	cfg.ApplyDefaults()
-
-	assert.Equal(t, defaultTimeoutSeconds, cfg.TimeoutSeconds)
-	assert.Equal(t, defaultTitle, cfg.Title)
-	assert.Equal(t, defaultAccentColor, cfg.AccentColor)
-	assert.Equal(t, DNDRespect, cfg.DND)
-}
-
-func TestApplyDefaultsPreservesExisting(t *testing.T) {
-	t.Parallel()
-
-	cfg := &Config{
-		Heading:        "Test",
-		TimeoutSeconds: 60,
-		Title:          "Custom Title",
-		AccentColor:    "#76B900",
-		DND:            DNDIgnore,
-	}
-	cfg.ApplyDefaults()
-
-	assert.Equal(t, 60, cfg.TimeoutSeconds)
-	assert.Equal(t, "Custom Title", cfg.Title)
-	assert.Equal(t, "#76B900", cfg.AccentColor)
-	assert.Equal(t, DNDIgnore, cfg.DND)
-}
-
-func TestApplyDefaultsEscValueFallback(t *testing.T) {
-	t.Parallel()
-
-	cfg := &Config{Heading: "Test", TimeoutValue: "defer_1h"}
-	cfg.ApplyDefaults()
-	assert.Equal(t, "defer_1h", cfg.EscValue)
-
-	cfg2 := &Config{Heading: "Test", TimeoutValue: "defer_1h", EscValue: "dismiss"}
-	cfg2.ApplyDefaults()
-	assert.Equal(t, "dismiss", cfg2.EscValue)
-}
-
-func TestApplyDefaultsButtonStyle(t *testing.T) {
-	t.Parallel()
-
-	cfg := &Config{
-		Heading: "Test",
-		Buttons: []Button{
-			{Label: "OK"},
-			{Label: "Cancel", Style: "danger"},
-			{Label: "Defer", Dropdown: []DropdownOption{{Label: "1h", Value: "defer_1h"}}},
-		},
-	}
-	cfg.ApplyDefaults()
-
-	assert.Equal(t, "secondary", cfg.Buttons[0].Style)
-	assert.Equal(t, "ok", cfg.Buttons[0].Value)
-	assert.Equal(t, "danger", cfg.Buttons[1].Style)
-	assert.Equal(t, "cancel", cfg.Buttons[1].Value)
-	assert.Equal(t, "secondary", cfg.Buttons[2].Style)
-	assert.Empty(t, cfg.Buttons[2].Value)
-}
-
 func TestValidate(t *testing.T) {
 	t.Parallel()
 
@@ -111,23 +47,29 @@ func TestValidate(t *testing.T) {
 		cfg     Config
 		wantErr string
 	}{
-		{name: "missing heading", cfg: Config{}, wantErr: `"heading" is required`},
-		{name: "valid minimal", cfg: Config{Heading: "Restart Required"}},
-		{name: "invalid dnd", cfg: Config{Heading: "Test", DND: "invalid"}, wantErr: `"dnd" must be`},
-		{name: "too many images", cfg: Config{Heading: "Test", Images: make([]string, 21)}, wantErr: "images: 21 exceeds maximum of 20"},
-		{name: "http image rejected", cfg: Config{Heading: "Test", Images: []string{"http://example.com/img.png"}}, wantErr: "must be an https URL"},
-		{name: "svg data uri rejected", cfg: Config{Heading: "Test", Images: []string{"data:image/svg+xml;base64,abc"}}, wantErr: "SVG data URIs are not allowed"},
-		{name: "raster data uri accepted", cfg: Config{Heading: "Test", Images: []string{"data:image/png;base64,abc"}}},
-		{name: "path traversal rejected", cfg: Config{Heading: "Test", WatchPaths: []string{"/etc/../shadow"}}, wantErr: "path traversal"},
-		{name: "dotdot in filename allowed", cfg: Config{Heading: "Test", WatchPaths: []string{"/tmp/foo..bar"}}},
-		{name: "too many watch paths", cfg: Config{Heading: "Test", WatchPaths: make([]string, 11)}, wantErr: "watch_paths: 11 exceeds maximum of 10"},
-		{name: "button newline rejected", cfg: Config{Heading: "Test", Buttons: []Button{{Label: "OK", Value: "val\nue"}}}, wantErr: "button values must not contain newlines"},
-		{name: "dropdown newline rejected", cfg: Config{Heading: "Test", Buttons: []Button{{Label: "D", Dropdown: []DropdownOption{{Label: "x", Value: "v\n"}}}}}, wantErr: "dropdown values must not contain newlines"},
-		{name: "html escaped", cfg: Config{Heading: "<script>alert(1)</script>"}},
-		{name: "javascript helpurl rejected", cfg: Config{Heading: "Test", HelpURL: "javascript:alert(1)"}, wantErr: `"help_url" must be an http or https URL`},
-		{name: "https helpurl accepted", cfg: Config{Heading: "Test", HelpURL: "https://example.com/help"}},
-		{name: "invalid accent color", cfg: Config{Heading: "Test", AccentColor: "red"}, wantErr: `"accent_color" must be a hex color`},
-		{name: "valid accent color", cfg: Config{Heading: "Test", AccentColor: "#76B900"}},
+		{name: "missing heading", cfg: Config{Message: "M"}, wantErr: `"heading" is required`},
+		{name: "missing message", cfg: Config{Heading: "H"}, wantErr: `"message" is required`},
+		{name: "valid minimal", cfg: Config{Heading: "Restart Required", Message: "Please restart."}},
+		{name: "invalid dnd", cfg: Config{Heading: "H", Message: "M", DND: "invalid"}, wantErr: `"dnd" must be`},
+		{name: "too many images", cfg: Config{Heading: "H", Message: "M", Images: make([]string, 21)}, wantErr: "images: 21 exceeds maximum of 20"},
+		{name: "http image rejected", cfg: Config{Heading: "H", Message: "M", Images: []string{"http://example.com/img.png"}}, wantErr: "must be an https URL"},
+		{name: "svg data uri rejected", cfg: Config{Heading: "H", Message: "M", Images: []string{"data:image/svg+xml;base64,abc"}}, wantErr: "SVG data URIs are not allowed"},
+		{name: "raster data uri accepted", cfg: Config{Heading: "H", Message: "M", Images: []string{"data:image/png;base64,abc"}}},
+		{name: "path traversal rejected", cfg: Config{Heading: "H", Message: "M", WatchPaths: []string{"/etc/../shadow"}}, wantErr: "path traversal"},
+		{name: "dotdot in filename allowed", cfg: Config{Heading: "H", Message: "M", WatchPaths: []string{"/tmp/foo..bar"}}},
+		{name: "too many watch paths", cfg: Config{Heading: "H", Message: "M", WatchPaths: make([]string, 11)}, wantErr: "watch_paths: 11 exceeds maximum of 10"},
+		{name: "button newline rejected", cfg: Config{Heading: "H", Message: "M", Buttons: []Button{{Label: "OK", Value: "val\nue"}}}, wantErr: "button values must not contain newlines"},
+		{name: "dropdown newline rejected", cfg: Config{Heading: "H", Message: "M", Buttons: []Button{{Label: "D", Dropdown: []DropdownOption{{Label: "x", Value: "v\n"}}}}}, wantErr: "dropdown values must not contain newlines"},
+		{name: "html escaped", cfg: Config{Heading: "<script>alert(1)</script>", Message: "M"}},
+		{name: "javascript helpurl rejected", cfg: Config{Heading: "H", Message: "M", HelpURL: "javascript:alert(1)"}, wantErr: `"help_url" must be an http or https URL`},
+		{name: "https helpurl accepted", cfg: Config{Heading: "H", Message: "M", HelpURL: "https://example.com/help"}},
+		{name: "invalid accent color", cfg: Config{Heading: "H", Message: "M", AccentColor: "red"}, wantErr: `"accent_color" must be a hex color`},
+		{name: "valid accent color", cfg: Config{Heading: "H", Message: "M", AccentColor: "#76B900"}},
+		{name: "priority out of range", cfg: Config{Heading: "H", Message: "M", Priority: 11}, wantErr: `"priority" must be 0-10`},
+		{name: "valid priority", cfg: Config{Heading: "H", Message: "M", Priority: 10}},
+		{name: "escalation after_defers < 1", cfg: Config{Heading: "H", Message: "M", Escalation: []EscalationStep{{AfterDefers: 0}}}, wantErr: "after_defers must be >= 1"},
+		{name: "self-referencing depends_on", cfg: Config{Heading: "H", Message: "M", ID: "a", DependsOn: "a"}, wantErr: "must not reference the notification's own ID"},
+		{name: "bad result_actions prefix", cfg: Config{Heading: "H", Message: "M", ResultActions: map[string]string{"x": "ftp://evil"}}, wantErr: "result_actions"},
 	}
 
 	for _, tt := range tests {
@@ -184,56 +126,6 @@ func TestValidateID(t *testing.T) {
 	}
 }
 
-func TestParseDeferValue(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		input string
-		want  time.Duration
-	}{
-		{"defer_4h", 4 * time.Hour},
-		{"defer_1d", 24 * time.Hour},
-		{"defer_30m", 30 * time.Minute},
-		{"defer_30s", 30 * time.Second},
-		{"defer", 0},
-		{"restart", 0},
-		{"", 0},
-		{"defer_0h", 0},
-		{"defer_100001d", 0},
-		{"defer_2500001h", 0},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			t.Parallel()
-			assert.Equal(t, tt.want, ParseDeferValue(tt.input))
-		})
-	}
-}
-
-func TestParseDeadline(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		input string
-		want  time.Duration
-	}{
-		{"24h", 24 * time.Hour},
-		{"7d", 7 * 24 * time.Hour},
-		{"30m", 30 * time.Minute},
-		{"", 0},
-		{"invalid", 0},
-		{"100001d", 0},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			t.Parallel()
-			assert.Equal(t, tt.want, ParseDeadline(tt.input))
-		})
-	}
-}
-
 func TestConfigJSONRoundTrip(t *testing.T) {
 	t.Parallel()
 
@@ -245,6 +137,7 @@ func TestConfigJSONRoundTrip(t *testing.T) {
 		DeferDeadline:  "24h",
 		MaxDefers:      3,
 		AccentColor:    "#76B900",
+		Priority:       8,
 		Buttons: []Button{
 			{Label: "Restart Now", Value: "url:ms-settings:windowsupdate", Style: "primary"},
 			{
@@ -255,6 +148,10 @@ func TestConfigJSONRoundTrip(t *testing.T) {
 				},
 			},
 		},
+		Escalation: []EscalationStep{
+			{AfterDefers: 3, Timeout: 120, AccentColor: "#FF0000", MessageSuffix: "\n\nThis is urgent."},
+		},
+		QuietHours: &QuietHours{Start: "22:00", End: "07:00", Timezone: "America/Los_Angeles"},
 	}
 
 	data, err := json.Marshal(cfg)
@@ -264,6 +161,23 @@ func TestConfigJSONRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, cfg.Heading, parsed.Heading)
 	assert.Equal(t, cfg.TimeoutSeconds, parsed.TimeoutSeconds)
+	assert.Equal(t, cfg.Priority, parsed.Priority)
 	assert.Len(t, parsed.Buttons, 2)
 	assert.Len(t, parsed.Buttons[1].Dropdown, 2)
+	assert.Len(t, parsed.Escalation, 1)
+	assert.NotNil(t, parsed.QuietHours)
+
+	assert.Equal(t, "timeout_value", jsonTag(t, data, "defer_1h"))
+}
+
+func jsonTag(t *testing.T, data []byte, value string) string {
+	t.Helper()
+	var m map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(data, &m))
+	for k, v := range m {
+		if string(v) == `"`+value+`"` {
+			return k
+		}
+	}
+	return ""
 }

@@ -8,30 +8,53 @@ import (
 	"net/url"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
-	"time"
 )
 
-// Config holds all parameters for a notification dialog shown to the end user.
-// Only Heading is required; all other fields have sensible defaults applied by
-// ApplyDefaults.
+// Config mirrors the hermes NotificationConfig schema. JSON tags use
+// snake_case to match hermes's native format — orbit writes this JSON
+// directly and hermes reads it without translation.
 type Config struct {
-	Heading        string   `json:"heading"`
-	Message        string   `json:"message,omitempty"`
-	Buttons        []Button `json:"buttons,omitempty"`
-	TimeoutSeconds int      `json:"timeout,omitempty"`
-	TimeoutValue   string   `json:"timeout_value,omitempty"`
-	EscValue       string   `json:"esc_value,omitempty"`
-	Title          string   `json:"title,omitempty"`
-	AccentColor    string   `json:"accent_color,omitempty"`
-	HelpURL        string   `json:"help_url,omitempty"`
-	ID             string   `json:"id,omitempty"`
-	DeferDeadline  string   `json:"defer_deadline,omitempty"`
-	MaxDefers      int      `json:"max_defers,omitempty"`
-	Images         []string `json:"images,omitempty"`
-	WatchPaths     []string `json:"watch_paths,omitempty"`
-	DND            string   `json:"dnd,omitempty"`
+	Heading        string            `json:"heading"`
+	Message        string            `json:"message,omitempty"`
+	Buttons        []Button          `json:"buttons,omitempty"`
+	TimeoutSeconds int               `json:"timeout,omitempty"`
+	TimeoutValue   string            `json:"timeout_value,omitempty"`
+	EscValue       string            `json:"esc_value,omitempty"`
+	Title          string            `json:"title,omitempty"`
+	AccentColor    string            `json:"accent_color,omitempty"`
+	HelpURL        string            `json:"help_url,omitempty"`
+	Platform       string            `json:"platform,omitempty"`
+	ID             string            `json:"id,omitempty"`
+	DeferDeadline  string            `json:"defer_deadline,omitempty"`
+	MaxDefers      int               `json:"max_defers,omitempty"`
+	Images         []string          `json:"images,omitempty"`
+	WatchPaths     []string          `json:"watch_paths,omitempty"`
+	DND            string            `json:"dnd,omitempty"`
+	Priority       int               `json:"priority,omitempty"`
+	Escalation     []EscalationStep  `json:"escalation,omitempty"`
+	ResultActions  map[string]string `json:"result_actions,omitempty"`
+	QuietHours     *QuietHours       `json:"quiet_hours,omitempty"`
+
+	HeadingLocalized map[string]string `json:"heading_localized,omitempty"`
+	MessageLocalized map[string]string `json:"message_localized,omitempty"`
+
+	DependsOn string `json:"depends_on,omitempty"`
+}
+
+// EscalationStep defines a mutation applied after repeated deferrals.
+type EscalationStep struct {
+	AfterDefers   int    `json:"after_defers"`
+	Timeout       int    `json:"timeout,omitempty"`
+	AccentColor   string `json:"accent_color,omitempty"`
+	MessageSuffix string `json:"message_suffix,omitempty"`
+}
+
+// QuietHours defines a daily window during which notifications are delayed.
+type QuietHours struct {
+	Start    string `json:"start"`
+	End      string `json:"end"`
+	Timezone string `json:"timezone,omitempty"`
 }
 
 // Button represents a clickable action in the notification.
@@ -54,32 +77,23 @@ const (
 	DNDSkip    = "skip"
 
 	MaxConfigSize = 64 * 1024
-
-	defaultTimeoutSeconds = 300
-	defaultTitle          = "IT Department"
-	defaultAccentColor    = "#D4A843"
 )
 
 var (
-	deferRe         = regexp.MustCompile(`^defer_(\d+)([hdms])$`)
-	deadlineDaysRe  = regexp.MustCompile(`^(\d+)d$`)
-	accentColorRe   = regexp.MustCompile(`^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$`)
-	safeIDRe        = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
-
-	deferMaxSafe = map[string]int{
-		"s": 9_000_000_000,
-		"m": 150_000_000,
-		"h": 2_500_000,
-		"d": 100_000,
-	}
-
-	unitToDuration = map[string]time.Duration{
-		"s": time.Second,
-		"m": time.Minute,
-		"h": time.Hour,
-		"d": 24 * time.Hour,
-	}
+	accentColorRe = regexp.MustCompile(`^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$`)
+	safeIDRe      = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
+	validDND      = map[string]bool{DNDRespect: true, DNDIgnore: true, DNDSkip: true}
 )
+
+// validateValue checks a value string for newlines. Returns an error
+// message or empty string. Does NOT escape — values must match
+// result_actions keys verbatim.
+func validateValue(s *string, prefix string) string {
+	if strings.ContainsAny(*s, "\n\r") {
+		return prefix + " values must not contain newlines"
+	}
+	return ""
+}
 
 // LoadJSON parses raw JSON bytes into a Config.
 func LoadJSON(data []byte) (*Config, error) {
@@ -95,33 +109,6 @@ func LoadJSON(data []byte) (*Config, error) {
 		return nil, fmt.Errorf("parse config JSON: %w", err)
 	}
 	return &cfg, nil
-}
-
-// ApplyDefaults fills in zero-value fields with sensible defaults.
-func (c *Config) ApplyDefaults() {
-	if c.TimeoutSeconds <= 0 {
-		c.TimeoutSeconds = defaultTimeoutSeconds
-	}
-	if c.Title == "" {
-		c.Title = defaultTitle
-	}
-	if c.AccentColor == "" {
-		c.AccentColor = defaultAccentColor
-	}
-	if c.EscValue == "" && c.TimeoutValue != "" {
-		c.EscValue = c.TimeoutValue
-	}
-	if c.DND == "" {
-		c.DND = DNDRespect
-	}
-	for i := range c.Buttons {
-		if c.Buttons[i].Style == "" {
-			c.Buttons[i].Style = "secondary"
-		}
-		if c.Buttons[i].Value == "" && len(c.Buttons[i].Dropdown) == 0 {
-			c.Buttons[i].Value = strings.ToLower(strings.ReplaceAll(c.Buttons[i].Label, " ", "_"))
-		}
-	}
 }
 
 // escapeOnce applies html.EscapeString idempotently by unescaping first.
@@ -140,6 +127,9 @@ func (c *Config) Validate() error {
 	if strings.TrimSpace(c.Heading) == "" {
 		errs = append(errs, `"heading" is required`)
 	}
+	if strings.TrimSpace(c.Message) == "" {
+		errs = append(errs, `"message" is required`)
+	}
 	if c.HelpURL != "" {
 		u, err := url.Parse(c.HelpURL)
 		if err != nil || (u.Scheme != "https" && u.Scheme != "http") {
@@ -151,20 +141,21 @@ func (c *Config) Validate() error {
 	}
 	for i := range c.Buttons {
 		c.Buttons[i].Label = escapeOnce(c.Buttons[i].Label)
-		c.Buttons[i].Value = escapeOnce(c.Buttons[i].Value)
-		if strings.ContainsAny(c.Buttons[i].Value, "\n\r") {
-			errs = append(errs, "button values must not contain newlines")
+		if err := validateValue(&c.Buttons[i].Value, "button"); err != "" {
+			errs = append(errs, err)
 		}
 		for j := range c.Buttons[i].Dropdown {
 			c.Buttons[i].Dropdown[j].Label = escapeOnce(c.Buttons[i].Dropdown[j].Label)
-			c.Buttons[i].Dropdown[j].Value = escapeOnce(c.Buttons[i].Dropdown[j].Value)
-			if strings.ContainsAny(c.Buttons[i].Dropdown[j].Value, "\n\r") {
-				errs = append(errs, "dropdown values must not contain newlines")
+			if err := validateValue(&c.Buttons[i].Dropdown[j].Value, "dropdown"); err != "" {
+				errs = append(errs, err)
 			}
 		}
 	}
-	if c.DND != "" && c.DND != DNDRespect && c.DND != DNDIgnore && c.DND != DNDSkip {
+	if c.DND != "" && !validDND[c.DND] {
 		errs = append(errs, fmt.Sprintf(`"dnd" must be %q, %q, or %q`, DNDRespect, DNDIgnore, DNDSkip))
+	}
+	if c.Priority < 0 || c.Priority > 10 {
+		errs = append(errs, fmt.Sprintf(`"priority" must be 0-10, got %d`, c.Priority))
 	}
 	if len(c.Images) > 20 {
 		errs = append(errs, fmt.Sprintf("images: %d exceeds maximum of 20", len(c.Images)))
@@ -194,6 +185,24 @@ func (c *Config) Validate() error {
 			}
 		}
 	}
+	for i, step := range c.Escalation {
+		if step.AfterDefers < 1 {
+			errs = append(errs, fmt.Sprintf("escalation[%d]: after_defers must be >= 1", i))
+		}
+	}
+	for k, v := range c.ResultActions {
+		if strings.ContainsAny(k, "\n\r") {
+			errs = append(errs, fmt.Sprintf("result_actions key %q: must not contain newlines", k))
+		}
+		lower := strings.ToLower(v)
+		if !strings.HasPrefix(lower, "cmd:") && !strings.HasPrefix(lower, "url:") &&
+			!strings.HasPrefix(lower, "https:") && !strings.HasPrefix(lower, "http:") {
+			errs = append(errs, fmt.Sprintf("result_actions[%q]: value must start with cmd:, url:, https:, or http:", k))
+		}
+	}
+	if c.DependsOn != "" && c.DependsOn == c.ID {
+		errs = append(errs, `"depends_on" must not reference the notification's own ID`)
+	}
 	if len(errs) > 0 {
 		return errors.New(strings.Join(errs, "; "))
 	}
@@ -212,41 +221,6 @@ func ValidateID(id string) error {
 		return fmt.Errorf("notification ID %q contains path traversal", id)
 	}
 	return nil
-}
-
-// ParseDeferValue extracts the duration from a defer response value like
-// "defer_4h", "defer_1d", "defer_30m", "defer_30s".
-func ParseDeferValue(value string) time.Duration {
-	m := deferRe.FindStringSubmatch(value)
-	if m == nil {
-		return 0
-	}
-	n, _ := strconv.Atoi(m[1])
-	if n > deferMaxSafe[m[2]] {
-		return 0
-	}
-	return time.Duration(n) * unitToDuration[m[2]]
-}
-
-// ParseDeadline parses a DeferDeadline string like "24h", "7d" into a
-// time.Duration.
-func ParseDeadline(s string) time.Duration {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return 0
-	}
-	if d, err := time.ParseDuration(s); err == nil {
-		return d
-	}
-	m := deadlineDaysRe.FindStringSubmatch(s)
-	if m != nil {
-		n, _ := strconv.Atoi(m[1])
-		if n > 100000 {
-			return 0
-		}
-		return time.Duration(n) * 24 * time.Hour
-	}
-	return 0
 }
 
 func trimLeadingWhitespace(b []byte) []byte {

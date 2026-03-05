@@ -4,14 +4,14 @@ _Available in Fleet Premium_
 
 In Fleet, you can send custom notifications to end users on macOS, Windows, and Linux hosts. Notifications are rich dialogs with configurable headings, messages, buttons, deferrals, image carousels, and filesystem watch paths.
 
-Fleet uses a TUF-managed notification binary (`fleet-notification`) that Orbit downloads and launches in the user's session via `execuser`. This is the same pattern used by [Nudge](https://github.com/macadmins/nudge) for macOS update enforcement and [swiftDialog](https://github.com/swiftDialog/swiftDialog) for setup experience status.
+Fleet uses [hermes](https://github.com/TsekNet/hermes), a TUF-managed notification binary that Orbit downloads and launches in the user's session via `execuser`. This is the same pattern used by [Nudge](https://github.com/macadmins/nudge) for macOS update enforcement and [swiftDialog](https://github.com/swiftDialog/swiftDialog) for setup experience status.
 
 ## How it works
 
 1. A Fleet admin defines notification templates in GitOps YAML (under `controls.notifications`) or via the REST API.
 2. Notification templates are linked to policies. When a policy fails for a host, the corresponding notification becomes pending.
 3. When Orbit polls the server for its config (every 30 seconds), the server includes any pending notification IDs in the response.
-4. Orbit downloads the `fleet-notification` binary from TUF (if not already cached), writes the notification config to a local JSON file, and launches the binary in the user's session.
+4. Orbit downloads the `hermes` binary from TUF (if not already cached), writes the notification config to a local JSON file, and launches the binary in the user's session with `--local` mode.
 5. The end user sees the notification dialog and can interact with it (click a button, defer, or let it time out).
 6. The user's response is reported back to the Fleet server for tracking.
 

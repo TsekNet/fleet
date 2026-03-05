@@ -166,30 +166,30 @@ func TestNotificationConfigReceiver_LaunchRateLimit(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestNotificationTargetForPlatform(t *testing.T) {
+func TestHermesTargetForPlatform(t *testing.T) {
 	t.Parallel()
 
-	target := notificationTargetForPlatform()
+	target := hermesTargetForPlatform()
 	switch runtime.GOOS {
 	case "windows":
-		assert.Equal(t, notificationWindowsTarget, target)
+		assert.Equal(t, hermesWindowsTarget, target)
 	case "darwin":
-		assert.Equal(t, notificationMacOSTarget, target)
+		assert.Equal(t, hermesMacOSTarget, target)
 	default:
-		assert.Equal(t, notificationLinuxTarget, target)
+		assert.Equal(t, hermesLinuxTarget, target)
 	}
 }
 
-func TestNotificationTargetDefinitions(t *testing.T) {
+func TestHermesTargetDefinitions(t *testing.T) {
 	t.Parallel()
 
-	assert.Equal(t, "windows", notificationWindowsTarget.Platform)
-	assert.Equal(t, "fleet-notification.exe", notificationWindowsTarget.TargetFile)
+	assert.Equal(t, "windows", hermesWindowsTarget.Platform)
+	assert.Equal(t, "hermes.exe", hermesWindowsTarget.TargetFile)
 
-	assert.Equal(t, "linux", notificationLinuxTarget.Platform)
-	assert.Equal(t, "fleet-notification", notificationLinuxTarget.TargetFile)
+	assert.Equal(t, "linux", hermesLinuxTarget.Platform)
+	assert.Equal(t, "hermes", hermesLinuxTarget.TargetFile)
 
-	assert.Equal(t, "macos", notificationMacOSTarget.Platform)
-	assert.Equal(t, "fleet-notification.app.tar.gz", notificationMacOSTarget.TargetFile)
-	assert.Equal(t, []string{"fleet-notification.app", "Contents", "MacOS", "fleet-notification"}, notificationMacOSTarget.ExtractedExecSubPath)
+	assert.Equal(t, "macos", hermesMacOSTarget.Platform)
+	assert.Equal(t, "hermes.app.tar.gz", hermesMacOSTarget.TargetFile)
+	assert.Equal(t, []string{"hermes.app", "Contents", "MacOS", "hermes"}, hermesMacOSTarget.ExtractedExecSubPath)
 }

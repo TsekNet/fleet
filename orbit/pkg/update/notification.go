@@ -25,44 +25,44 @@ const (
 )
 
 var (
-	notificationWindowsTarget = TargetInfo{
+	hermesWindowsTarget = TargetInfo{
 		Platform:   "windows",
 		Channel:    "stable",
-		TargetFile: "fleet-notification.exe",
+		TargetFile: "hermes.exe",
 	}
 
-	notificationLinuxTarget = TargetInfo{
+	hermesLinuxTarget = TargetInfo{
 		Platform:   "linux",
 		Channel:    "stable",
-		TargetFile: "fleet-notification",
+		TargetFile: "hermes",
 	}
 
-	notificationMacOSTarget = TargetInfo{
+	hermesMacOSTarget = TargetInfo{
 		Platform:             "macos",
 		Channel:              "stable",
-		TargetFile:           "fleet-notification.app.tar.gz",
-		ExtractedExecSubPath: []string{"fleet-notification.app", "Contents", "MacOS", "fleet-notification"},
+		TargetFile:           "hermes.app.tar.gz",
+		ExtractedExecSubPath: []string{"hermes.app", "Contents", "MacOS", "hermes"},
 	}
 )
 
-// notificationTargetForPlatform returns the TUF TargetInfo for the current OS.
-func notificationTargetForPlatform() TargetInfo {
+// hermesTargetForPlatform returns the TUF TargetInfo for the current OS.
+func hermesTargetForPlatform() TargetInfo {
 	switch runtime.GOOS {
 	case "windows":
-		return notificationWindowsTarget
+		return hermesWindowsTarget
 	case "darwin":
-		return notificationMacOSTarget
+		return hermesMacOSTarget
 	default:
-		return notificationLinuxTarget
+		return hermesLinuxTarget
 	}
 }
 
-const notificationTargetName = "fleet-notification"
+const hermesTargetName = "hermes"
 
 // NotificationConfigReceiver is an OrbitConfigReceiver that reacts to
 // PendingNotificationIDs in the orbit config. When notification IDs are
-// present, it ensures the notification UI binary is available via TUF,
-// writes the notification config to a temp file, and launches the binary
+// present, it ensures the hermes UI binary is available via TUF,
+// writes the notification config to a temp file, and launches hermes
 // in the user's session via execuser.
 type NotificationConfigReceiver struct {
 	opt NotificationReceiverOptions
@@ -81,13 +81,13 @@ type NotificationConfigReceiver struct {
 
 // NotificationReceiverOptions configures the NotificationConfigReceiver.
 type NotificationReceiverOptions struct {
-	// UpdateRunner manages TUF targets for the notification binary.
+	// UpdateRunner manages TUF targets for the hermes binary.
 	UpdateRunner *Runner
 	// RootDir is where notification config files are written.
 	RootDir string
 	// Interval is the minimum time between notification launches.
 	Interval time.Duration
-	// runNotificationFn can be set in tests to mock the notification binary.
+	// runNotificationFn can be set in tests to mock the hermes binary.
 	runNotificationFn func(execPath, configPath string) error
 	// fetchConfigFn fetches the full notification config from the server by ID.
 	// In production this calls the orbit API; in tests it can be mocked.
@@ -101,7 +101,7 @@ func ApplyNotificationConfigReceiverMiddleware(opt NotificationReceiverOptions) 
 }
 
 // Run implements fleet.OrbitConfigReceiver. It checks for pending notification
-// IDs and launches the notification UI binary for the first pending one.
+// IDs and launches the hermes UI binary for the first pending one.
 func (n *NotificationConfigReceiver) Run(cfg *fleet.OrbitConfig) error {
 	log.Debug().Msg("running notification config receiver")
 
@@ -144,10 +144,10 @@ func (n *NotificationConfigReceiver) Run(cfg *fleet.OrbitConfig) error {
 	}
 	n.cmdMu.Unlock()
 
-	updaterHasTarget := n.opt.UpdateRunner.HasRunnerOptTarget(notificationTargetName)
-	runnerHasLocalHash := n.opt.UpdateRunner.HasLocalHash(notificationTargetName)
+	updaterHasTarget := n.opt.UpdateRunner.HasRunnerOptTarget(hermesTargetName)
+	runnerHasLocalHash := n.opt.UpdateRunner.HasLocalHash(hermesTargetName)
 	if !updaterHasTarget || !runnerHasLocalHash {
-		log.Info().Msg("refreshing the update runner config with notification binary targets and hashes")
+		log.Info().Msg("refreshing the update runner config with hermes binary targets and hashes")
 		log.Debug().Msgf("updater has target: %t, runner has local hash: %t", updaterHasTarget, runnerHasLocalHash)
 		return n.setTargetsAndHashes()
 	}
@@ -171,12 +171,12 @@ func (n *NotificationConfigReceiver) Run(cfg *fleet.OrbitConfig) error {
 }
 
 func (n *NotificationConfigReceiver) setTargetsAndHashes() error {
-	n.opt.UpdateRunner.AddRunnerOptTarget(notificationTargetName)
-	n.opt.UpdateRunner.updater.SetTargetInfo(notificationTargetName, notificationTargetForPlatform())
-	if err := n.opt.UpdateRunner.StoreLocalHash(notificationTargetName); err != nil {
-		log.Debug().Msgf("removing %s from target options, error updating local hashes: %s", notificationTargetName, err)
-		n.opt.UpdateRunner.RemoveRunnerOptTarget(notificationTargetName)
-		n.opt.UpdateRunner.updater.RemoveTargetInfo(notificationTargetName)
+	n.opt.UpdateRunner.AddRunnerOptTarget(hermesTargetName)
+	n.opt.UpdateRunner.updater.SetTargetInfo(hermesTargetName, hermesTargetForPlatform())
+	if err := n.opt.UpdateRunner.StoreLocalHash(hermesTargetName); err != nil {
+		log.Debug().Msgf("removing %s from target options, error updating local hashes: %s", hermesTargetName, err)
+		n.opt.UpdateRunner.RemoveRunnerOptTarget(hermesTargetName)
+		n.opt.UpdateRunner.updater.RemoveTargetInfo(hermesTargetName)
 		return err
 	}
 	return nil
@@ -189,8 +189,12 @@ func (n *NotificationConfigReceiver) fetchNotificationConfig(id string) (json.Ra
 	return nil, errors.New("fetchConfigFn not configured")
 }
 
+func (n *NotificationConfigReceiver) configPath(id string) string {
+	return filepath.Join(n.opt.RootDir, notificationConfigFilePrefix+id+".json")
+}
+
 func (n *NotificationConfigReceiver) configure(id string, data json.RawMessage) error {
-	cfgFile := filepath.Join(n.opt.RootDir, notificationConfigFilePrefix+id+".json")
+	cfgFile := n.configPath(id)
 	writeConfig := func() error {
 		return os.WriteFile(cfgFile, data, constant.DefaultWorldReadableFileMode)
 	}
@@ -229,66 +233,71 @@ func (n *NotificationConfigReceiver) configure(id string, data json.RawMessage) 
 }
 
 func (n *NotificationConfigReceiver) launch(id string) error {
-	cfgFile := filepath.Join(n.opt.RootDir, notificationConfigFilePrefix+id+".json")
+	cfgFile := n.configPath(id)
 
-	if n.cmdMu.TryLock() {
-		defer n.cmdMu.Unlock()
+	if !n.cmdMu.TryLock() {
+		return nil
+	}
+	defer n.cmdMu.Unlock()
 
-		if time.Since(n.lastRun) > n.opt.Interval {
-			target, err := n.opt.UpdateRunner.updater.localTarget(notificationTargetName)
-			if err != nil {
-				return err
-			}
+	if time.Since(n.lastRun) <= n.opt.Interval {
+		return nil
+	}
 
-			meta, err := n.opt.UpdateRunner.updater.Lookup(notificationTargetName)
-			if err != nil {
-				return err
-			}
-			if err := checkFileHash(meta, target.Path); err != nil {
-				n.launchErr = nil
-				return n.setTargetsAndHashes()
-			}
+	target, err := n.opt.UpdateRunner.updater.localTarget(hermesTargetName)
+	if err != nil {
+		return err
+	}
 
-			if n.launchErr != nil {
-				log.Info().Msgf("notification binary disabled since %s due to launch error: %v", n.launchErr.timestamp.Format("2006-01-02"), n.launchErr)
-				n.lastRun = time.Now()
-				return nil
-			}
+	meta, err := n.opt.UpdateRunner.updater.Lookup(hermesTargetName)
+	if err != nil {
+		return err
+	}
+	if err := checkFileHash(meta, target.Path); err != nil {
+		n.launchErr = nil
+		return n.setTargetsAndHashes()
+	}
 
-			n.activeNotificationID = id
+	if n.launchErr != nil {
+		log.Info().Msgf("hermes binary disabled since %s due to launch error: %v", n.launchErr.timestamp.Format("2006-01-02"), n.launchErr)
+		n.lastRun = time.Now()
+		return nil
+	}
 
-			fn := n.opt.runNotificationFn
-			if fn == nil {
-				fn = func(appPath, configPath string) error {
-					log.Info().Str("notification_id", id).Msg("launching notification UI via execuser")
-					_, err := execuser.Run(
-						appPath,
-						execuser.WithArg("--config", configPath),
-					)
-					return err
-				}
-			}
+	n.activeNotificationID = id
 
-			if err := fn(target.ExecPath, cfgFile); err != nil {
-				n.activeNotificationID = ""
-				if exitErr, ok := err.(*exec.ExitError); ok {
-					n.launchErr = &notificationLaunchErr{
-						err:       err,
-						exitCode:  exitErr.ExitCode(),
-						detail:    string(exitErr.Stderr),
-						cfgFile:   cfgFile,
-						timestamp: time.Now(),
-					}
-					return fmt.Errorf("launching notification binary with config %q: %w", cfgFile, n.launchErr)
-				}
-				return fmt.Errorf("launching notification binary with config %q: %w", cfgFile, err)
-			}
-
-			n.lastRun = time.Now()
-			n.activeNotificationID = ""
+	fn := n.opt.runNotificationFn
+	if fn == nil {
+		fn = func(appPath, configPath string) error {
+			log.Info().Str("notification_id", id).Msg("launching hermes via execuser")
+			_, err := execuser.Run(
+				appPath,
+				execuser.WithArg("--local", ""),
+				execuser.WithArg("--config", configPath),
+				execuser.WithArg("--notification-id", id),
+			)
+			return err
 		}
 	}
 
+	if err := fn(target.ExecPath, cfgFile); err != nil {
+		n.activeNotificationID = ""
+		wrapErr := err
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			n.launchErr = &notificationLaunchErr{
+				err:       err,
+				exitCode:  exitErr.ExitCode(),
+				detail:    string(exitErr.Stderr),
+				cfgFile:   cfgFile,
+				timestamp: time.Now(),
+			}
+			wrapErr = n.launchErr
+		}
+		return fmt.Errorf("launching hermes with config %q: %w", cfgFile, wrapErr)
+	}
+
+	n.lastRun = time.Now()
+	n.activeNotificationID = ""
 	return nil
 }
 
