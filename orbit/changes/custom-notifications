@@ -1,0 +1,1 @@
+* Added custom notification support to orbit. Fleet administrators can define notification templates (heading, message, buttons, deferrals, images, watch paths) that are delivered to end users via a TUF-managed notification UI binary launched in the user's session via execuser.

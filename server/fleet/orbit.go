@@ -55,6 +55,11 @@ type OrbitConfigNotifications struct {
 	// see EnforceBitLockerEncryption for Windows and RotateDiskEncryptionKey
 	// for macOS.
 	RunDiskEncryptionEscrow bool `json:"run_disk_encryption_escrow,omitempty"`
+
+	// PendingNotificationIDs lists the IDs of notifications that should be
+	// shown to the end user on this host. The notification UI binary is
+	// launched via execuser for each pending notification.
+	PendingNotificationIDs []string `json:"pending_notification_ids,omitempty"`
 }
 
 type OrbitConfig struct {

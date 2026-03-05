@@ -1208,6 +1208,44 @@ log stream --predicate 'subsystem == "com.github.macadmins.Nudge"' --info --styl
 open /opt/orbit/bin/nudge/macos/stable/Nudge.app --args -json-url file:///opt/orbit/nudge-config.json -print-json-config
 ```
 
+### Custom notifications
+
+Custom notifications are rich dialogs (heading, message, buttons, deferrals, image carousels, watch paths) delivered to end users. The integration follows the same pattern as Nudge:
+
+1. When Orbit pings the server for a config (every 30 seconds), the server includes any pending notification IDs in `notifications.pending_notification_ids`.
+2. If Orbit gets pending notification IDs, it downloads the `fleet-notification` binary from TUF.
+3. Orbit writes the notification config to `<ORBIT_ROOT_DIR>/notification-<id>.json` and launches the binary in the user's session via `execuser`.
+
+#### Debugging tips
+
+- Orbit launches the notification binary using `execuser.Run`, which runs the binary in the logged-in user's session. You can test the binary directly:
+
+```sh
+fleet-notification --config /path/to/notification.json --headless
+```
+
+- The `--headless` flag skips the webview UI and prints the simulated result to stdout. Use this on systems without a display server (e.g. WSL, CI).
+
+- Notification config files are written to the Orbit root directory with the naming pattern `notification-<id>.json`. Check these files to verify the config being delivered:
+
+```sh
+# macOS/Linux
+cat /opt/orbit/notification-restart-required.json | python3 -m json.tool
+
+# Windows
+type C:\Windows\system32\config\systemprofile\AppData\Local\FleetDM\Orbit\notification-restart-required.json
+```
+
+- Enable debug logging in fleetd to see notification delivery logs. Look for `notification` in the log output:
+
+```sh
+# macOS
+sudo grep "notification" /var/log/orbit/orbit.stderr.log
+
+# Windows
+grep "notification" C:\Windows\system32\config\systemprofile\AppData\Local\FleetDM\Orbit\Logs\orbit-osquery.log
+```
+
 ### Bootstrap package
 
 A bootstrap package is a `pkg` file that gets automatically installed on hosts when they enroll via ABM/DEP.

@@ -3910,6 +3910,8 @@ Notifies the server about an agent error, resulting in two outcomes:
 - [Download software installer](#download-software-installer)
 - [Get orbit software install details](#get-orbit-software-install-details)
 - [Post disk encryption key](#post-disk-encryption-key)
+- [Get orbit notification config](#get-orbit-notification-config)
+- [Post orbit notification result](#post-orbit-notification-result)
 
 ---
 
@@ -4170,7 +4172,10 @@ Returns `enabled` set to `true` if items (e.g. software) for the setup experienc
       "2267a440-4cfb-48af-804b-d52224a05e1b"
     ],
     "run_setup_experience": true,
-    "run_disk_encryption_escrow": true
+    "run_disk_encryption_escrow": true,
+    "pending_notification_ids": [
+      "restart-required"
+    ]
   },
   "update_channels": {
     "orbit": "stable",
@@ -4439,6 +4444,86 @@ Body: <blob>
   "orbit_node_key":"FbvSsWfTRwXEecUlCBTLmBcjGFAdzqd/",
   "encryption_key": "Zm9vYmFyem9vYmFyZG9vYmFybG9vYmFy",
   "client_error": "example error",
+}
+```
+
+##### Default response
+
+`Status: 204`
+
+---
+
+### Get orbit notification config
+
+`POST /api/fleet/orbit/notification_config`
+
+Returns the full notification config for a pending notification.
+
+##### Parameters
+
+| Name            | Type   | In   | Description                            |
+| --------------- | ------ | ---- | -------------------------------------- |
+| orbit_node_key  | string | body | The Orbit node key for authentication. |
+| notification_id | string | body | The notification template ID.          |
+
+##### Example
+
+`POST /api/fleet/orbit/notification_config`
+
+##### Request body
+
+```json
+{
+  "orbit_node_key": "FbvSsWfTRwXEecUlCBTLmBcjGFAdzqd/",
+  "notification_id": "restart-required"
+}
+```
+
+##### Default response
+
+`Status: 200`
+
+```json
+{
+  "heading": "Restart Required",
+  "message": "Your computer needs to restart to apply security updates.",
+  "buttons": [
+    {"label": "Restart Now", "value": "restart", "style": "primary"},
+    {"label": "Defer 1h", "value": "defer_1h", "style": "secondary"}
+  ],
+  "timeout": 300,
+  "timeout_value": "defer_1h",
+  "accent_color": "#76B900"
+}
+```
+
+---
+
+### Post orbit notification result
+
+`POST /api/fleet/orbit/notification_result`
+
+Reports the end user's response to a notification back to the Fleet server.
+
+##### Parameters
+
+| Name            | Type   | In   | Description                                         |
+| --------------- | ------ | ---- | --------------------------------------------------- |
+| orbit_node_key  | string | body | The Orbit node key for authentication.              |
+| notification_id | string | body | The notification template ID.                       |
+| result          | string | body | The user's response value (button value, defer, timeout). |
+
+##### Example
+
+`POST /api/fleet/orbit/notification_result`
+
+##### Request body
+
+```json
+{
+  "orbit_node_key": "FbvSsWfTRwXEecUlCBTLmBcjGFAdzqd/",
+  "notification_id": "restart-required",
+  "result": "defer_1h"
 }
 ```
 

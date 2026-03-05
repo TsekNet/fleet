@@ -318,6 +318,7 @@ agent_options:
 The `controls` section allows you to configure scripts and device management (MDM) features in Fleet.
 
 - `scripts` is a list of paths to macOS, Windows, or Linux scripts.
+- `notifications` is a list of paths to notification template files (`.yml`). See [notifications](#notifications).
 - `windows_enabled_and_configured` specifies whether or not to turn on Windows MDM features (default: `false`). Can only be configured for all teams (`default.yml`).
 - `enable_turn_on_windows_mdm_manually` specifies whether or not to require end users to manually turn on MDM in **Settings > Access work or school** (default: `false`). If `false`, MDM is automatically turned on for all Windows hosts that aren't connected to any MDM solution. Can only be configured for all teams (`default.yml`).
 - `windows_migration_enabled` specifies whether or not to automatically migrate Windows hosts connected to another MDM solution. If `false`, MDM is only turned on after hosts are unenrolled from your old MDM solution. `enable_turn_on_windows_mdm_manually` must be set to `false`. (default: `false`). Can only be configured for all teams (`default.yml`).
@@ -381,7 +382,32 @@ controls:
     enable: true
     mode: voluntary
     webhook_url: https://example.org/webhook_handler
+  notifications: # Available in Fleet Premium
+    - path: ../lib/notifications/restart-required.yml
+    - path: ../lib/notifications/firmware-update.yml
 ```
+
+### notifications
+
+- `notifications` is a list of paths to notification template files (`.yml`). Each template defines a notification dialog that can be shown to end users when a linked policy fails. See the [custom notifications guide](https://fleetdm.com/guides/custom-notifications) for the full template reference.
+
+Notification template files support the following fields:
+
+- `id` (required) uniquely identifies the notification for delivery tracking. Must contain only alphanumeric characters, hyphens, underscores, and dots.
+- `heading` (required) is the bold heading shown at the top of the notification.
+- `message` is the body text shown below the heading (default: `""`).
+- `buttons` is a list of clickable actions. Each button has `label`, `value`, `style` (`primary`, `secondary`, or `danger`), and optional `dropdown` options (default: single "OK" button).
+- `timeout` is how long the notification stays visible in seconds before auto-actioning with `timeout_value` (default: `300`).
+- `timeout_value` is the value reported when the timeout fires (default: `""`).
+- `esc_value` is the value reported when the user presses ESC or closes the window (default: same as `timeout_value`).
+- `title` is the small label at the top of the notification window (default: `"IT Department"`).
+- `accent_color` is the hex color for the accent bar and primary buttons (default: `"#D4A843"`).
+- `help_url` is the "Need help?" link shown in the header. Must be an `http` or `https` URL (default: `""`).
+- `defer_deadline` is the maximum duration for deferrals, e.g. `24h`, `7d` (default: `""`).
+- `max_defers` is the maximum number of times the user may defer. `0` means unlimited until deadline (default: `0`).
+- `images` is a list of HTTPS image URLs or `data:image/` URIs for a carousel, max 20. SVG data URIs are not allowed (default: `[]`).
+- `watch_paths` is a list of filesystem paths to monitor for changes, max 10 (default: `[]`).
+- `dnd` controls behavior when Do Not Disturb is active: `respect` (wait), `ignore` (show anyway), or `skip` (silently complete) (default: `"respect"`).
 
 ### macos_updates
 
