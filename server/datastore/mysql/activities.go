@@ -1077,6 +1077,8 @@ WHERE
 		fn = ds.activateNextVPPAppInstallActivity
 	case "in_house_app_install":
 		fn = ds.activateNextInHouseAppInstallActivity
+	case "notification":
+		fn = ds.activateNextNotificationActivity
 	default:
 		return nil, ctxerr.Errorf(ctx, "unsupported activity type %s", actType)
 	}
@@ -1133,6 +1135,39 @@ ORDER BY
 	}
 	if _, err := tx.ExecContext(ctx, stmt, args...); err != nil {
 		return ctxerr.Wrap(ctx, err, "insert to activate scripts")
+	}
+	return nil
+}
+
+func (ds *Datastore) activateNextNotificationActivity(ctx context.Context, tx sqlx.ExtContext, hostID uint, execIDs []string) error {
+	const insStmt = `
+INSERT INTO host_notification_results
+	(host_id, execution_id, notification_db_id, notification_id, policy_id)
+SELECT
+	ua.host_id,
+	ua.execution_id,
+	nua.notification_db_id,
+	n.notification_id,
+	nua.policy_id
+FROM
+	upcoming_activities ua
+	INNER JOIN notification_upcoming_activities nua ON nua.upcoming_activity_id = ua.id
+	INNER JOIN notifications n ON n.id = nua.notification_db_id
+WHERE
+	ua.host_id = ? AND
+	ua.execution_id IN (?)
+ORDER BY
+	ua.priority DESC, ua.created_at ASC
+`
+	if len(execIDs) == 0 {
+		return nil
+	}
+	stmt, args, err := sqlx.In(insStmt, hostID, execIDs)
+	if err != nil {
+		return ctxerr.Wrap(ctx, err, "prepare insert to activate notifications")
+	}
+	if _, err := tx.ExecContext(ctx, stmt, args...); err != nil {
+		return ctxerr.Wrap(ctx, err, "insert to activate notifications")
 	}
 	return nil
 }

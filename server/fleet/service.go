@@ -1289,6 +1289,13 @@ type Service interface {
 	// hosts with no team.
 	BatchSetScripts(ctx context.Context, maybeTmID *uint, maybeTmName *string, payloads []ScriptPayload, dryRun bool) ([]ScriptResponse, error)
 
+	///////////////////////////////////////////////////////////////////////////
+	// Custom Notifications
+
+	BatchSetNotifications(ctx context.Context, maybeTmID *uint, maybeTmName *string, payloads []NotificationPayload, dryRun bool) ([]NotificationResponse, error)
+	GetOrbitNotificationConfig(ctx context.Context, notificationID string) (json.RawMessage, error)
+	SaveOrbitNotificationResult(ctx context.Context, notificationID string, result string, exitCode int) error
+
 	// BatchScriptExecute runs a script on many hosts. It creates and returns a batch execution ID
 	BatchScriptExecute(ctx context.Context, scriptID uint, hostIDs []uint, filters *map[string]any, notBefore *time.Time) (string, error)
 

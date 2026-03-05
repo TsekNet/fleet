@@ -144,6 +144,13 @@ func (c *Client) ApplyNoTeamScripts(scripts []fleet.ScriptPayload, opts fleet.Ap
 	return resp.Scripts, err
 }
 
+func (c *Client) ApplyNoTeamNotifications(notifications []fleet.NotificationPayload, opts fleet.ApplySpecOptions) ([]fleet.NotificationResponse, error) {
+	verb, path := "POST", "/api/latest/fleet/notifications/batch"
+	var resp batchSetNotificationsResponse
+	err := c.authenticatedRequestWithQuery(map[string]interface{}{"notifications": notifications}, verb, path, &resp, opts.RawQuery())
+	return resp.Notifications, err
+}
+
 func (c *Client) validateMacOSSetupScript(fileName string) ([]byte, error) {
 	if err := c.CheckAppleMDMEnabled(); err != nil {
 		return nil, err

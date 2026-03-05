@@ -280,6 +280,7 @@ type PolicyData struct {
 	SoftwareInstallerID   *uint `json:"-" db:"software_installer_id"`
 	VPPAppsTeamsID        *uint `json:"-" db:"vpp_apps_teams_id"`
 	ScriptID              *uint `json:"-" db:"script_id"`
+	NotificationDBID      *uint `json:"-" db:"notification_db_id"`
 
 	// ConditionalAccessEnabled indicates whether this is a policy used for Microsoft conditional access.
 	//
@@ -318,6 +319,13 @@ type Policy struct {
 	//
 	// This field is populated from PolicyData.ScriptID
 	RunScript *PolicyScript `json:"run_script,omitempty"`
+
+	// ShowNotification is used to trigger a notification when this policy fails.
+	//
+	// Only applies to team policies.
+	//
+	// This field is populated from PolicyData.NotificationDBID.
+	ShowNotification *PolicyNotification `json:"show_notification,omitempty"`
 }
 
 type PolicyCalendarData struct {

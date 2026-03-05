@@ -96,6 +96,19 @@ func (c *Client) ApplyTeamScripts(tmName string, scripts []fleet.ScriptPayload, 
 	return resp.Scripts, err
 }
 
+func (c *Client) ApplyTeamNotifications(tmName string, notifications []fleet.NotificationPayload, opts fleet.ApplySpecOptions) ([]fleet.NotificationResponse, error) {
+	verb, path := "POST", "/api/latest/fleet/notifications/batch"
+	query, err := url.ParseQuery(opts.RawQuery())
+	if err != nil {
+		return nil, err
+	}
+	query.Add("team_name", tmName)
+
+	var resp batchSetNotificationsResponse
+	err = c.authenticatedRequestWithQuery(map[string]interface{}{"notifications": notifications}, verb, path, &resp, query.Encode())
+	return resp.Notifications, err
+}
+
 func (c *Client) ApplyTeamSoftwareInstallers(tmName string, softwareInstallers []fleet.SoftwareInstallerPayload, opts fleet.ApplySpecOptions) ([]fleet.SoftwarePackageResponse, error) {
 	query, err := url.ParseQuery(opts.RawQuery())
 	if err != nil {

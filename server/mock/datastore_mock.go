@@ -1267,6 +1267,20 @@ type GetHostScriptDetailsFunc func(ctx context.Context, hostID uint, teamID *uin
 
 type BatchSetScriptsFunc func(ctx context.Context, tmID *uint, scripts []*fleet.Script) ([]fleet.ScriptResponse, error)
 
+type BatchSetNotificationsFunc func(ctx context.Context, tmID *uint, payloads []*fleet.NotificationPayload) ([]fleet.NotificationResponse, error)
+
+type GetNotificationByNotificationIDFunc func(ctx context.Context, notificationID string, teamID *uint) (*fleet.Notification, error)
+
+type GetNotificationContentsFunc func(ctx context.Context, notificationContentID uint) ([]byte, error)
+
+type NewHostNotificationExecutionFunc func(ctx context.Context, request *fleet.HostNotificationRequestPayload) (string, error)
+
+type SetHostNotificationResultFunc func(ctx context.Context, result *fleet.HostNotificationResultPayload) error
+
+type ListPendingNotificationsForHostFunc func(ctx context.Context, hostID uint) ([]string, error)
+
+type GetPoliciesWithAssociatedNotificationFunc func(ctx context.Context, teamID *uint) ([]fleet.PolicyNotificationData, error)
+
 type BatchExecuteScriptFunc func(ctx context.Context, userID *uint, scriptID uint, hostIDs []uint) (string, error)
 
 type BatchScheduleScriptFunc func(ctx context.Context, userID *uint, scriptID uint, hostIDs []uint, notBefore time.Time) (string, error)
@@ -3651,6 +3665,27 @@ type DataStore struct {
 
 	BatchSetScriptsFunc        BatchSetScriptsFunc
 	BatchSetScriptsFuncInvoked bool
+
+	BatchSetNotificationsFunc        BatchSetNotificationsFunc
+	BatchSetNotificationsFuncInvoked bool
+
+	GetNotificationByNotificationIDFunc        GetNotificationByNotificationIDFunc
+	GetNotificationByNotificationIDFuncInvoked bool
+
+	GetNotificationContentsFunc        GetNotificationContentsFunc
+	GetNotificationContentsFuncInvoked bool
+
+	NewHostNotificationExecutionFunc        NewHostNotificationExecutionFunc
+	NewHostNotificationExecutionFuncInvoked bool
+
+	SetHostNotificationResultFunc        SetHostNotificationResultFunc
+	SetHostNotificationResultFuncInvoked bool
+
+	ListPendingNotificationsForHostFunc        ListPendingNotificationsForHostFunc
+	ListPendingNotificationsForHostFuncInvoked bool
+
+	GetPoliciesWithAssociatedNotificationFunc        GetPoliciesWithAssociatedNotificationFunc
+	GetPoliciesWithAssociatedNotificationFuncInvoked bool
 
 	BatchExecuteScriptFunc        BatchExecuteScriptFunc
 	BatchExecuteScriptFuncInvoked bool
@@ -8784,6 +8819,55 @@ func (s *DataStore) BatchSetScripts(ctx context.Context, tmID *uint, scripts []*
 	s.BatchSetScriptsFuncInvoked = true
 	s.mu.Unlock()
 	return s.BatchSetScriptsFunc(ctx, tmID, scripts)
+}
+
+func (s *DataStore) BatchSetNotifications(ctx context.Context, tmID *uint, payloads []*fleet.NotificationPayload) ([]fleet.NotificationResponse, error) {
+	s.mu.Lock()
+	s.BatchSetNotificationsFuncInvoked = true
+	s.mu.Unlock()
+	return s.BatchSetNotificationsFunc(ctx, tmID, payloads)
+}
+
+func (s *DataStore) GetNotificationByNotificationID(ctx context.Context, notificationID string, teamID *uint) (*fleet.Notification, error) {
+	s.mu.Lock()
+	s.GetNotificationByNotificationIDFuncInvoked = true
+	s.mu.Unlock()
+	return s.GetNotificationByNotificationIDFunc(ctx, notificationID, teamID)
+}
+
+func (s *DataStore) GetNotificationContents(ctx context.Context, notificationContentID uint) ([]byte, error) {
+	s.mu.Lock()
+	s.GetNotificationContentsFuncInvoked = true
+	s.mu.Unlock()
+	return s.GetNotificationContentsFunc(ctx, notificationContentID)
+}
+
+func (s *DataStore) NewHostNotificationExecution(ctx context.Context, request *fleet.HostNotificationRequestPayload) (string, error) {
+	s.mu.Lock()
+	s.NewHostNotificationExecutionFuncInvoked = true
+	s.mu.Unlock()
+	return s.NewHostNotificationExecutionFunc(ctx, request)
+}
+
+func (s *DataStore) SetHostNotificationResult(ctx context.Context, result *fleet.HostNotificationResultPayload) error {
+	s.mu.Lock()
+	s.SetHostNotificationResultFuncInvoked = true
+	s.mu.Unlock()
+	return s.SetHostNotificationResultFunc(ctx, result)
+}
+
+func (s *DataStore) ListPendingNotificationsForHost(ctx context.Context, hostID uint) ([]string, error) {
+	s.mu.Lock()
+	s.ListPendingNotificationsForHostFuncInvoked = true
+	s.mu.Unlock()
+	return s.ListPendingNotificationsForHostFunc(ctx, hostID)
+}
+
+func (s *DataStore) GetPoliciesWithAssociatedNotification(ctx context.Context, teamID *uint) ([]fleet.PolicyNotificationData, error) {
+	s.mu.Lock()
+	s.GetPoliciesWithAssociatedNotificationFuncInvoked = true
+	s.mu.Unlock()
+	return s.GetPoliciesWithAssociatedNotificationFunc(ctx, teamID)
 }
 
 func (s *DataStore) BatchExecuteScript(ctx context.Context, userID *uint, scriptID uint, hostIDs []uint) (string, error) {

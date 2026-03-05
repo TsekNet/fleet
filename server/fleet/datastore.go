@@ -1941,6 +1941,30 @@ type Datastore interface {
 	// BatchSetScripts sets the scripts for the given team or no team.
 	BatchSetScripts(ctx context.Context, tmID *uint, scripts []*Script) ([]ScriptResponse, error)
 
+	///////////////////////////////////////////////////////////////////////////
+	// Custom Notifications
+
+	// BatchSetNotifications replaces the notification templates for a team (or no team).
+	BatchSetNotifications(ctx context.Context, tmID *uint, payloads []*NotificationPayload) ([]NotificationResponse, error)
+
+	// GetNotificationByNotificationID returns the notification template matching the string ID for the given team scope.
+	GetNotificationByNotificationID(ctx context.Context, notificationID string, teamID *uint) (*Notification, error)
+
+	// GetNotificationContents returns the raw JSON config for a notification template.
+	GetNotificationContents(ctx context.Context, notificationContentID uint) ([]byte, error)
+
+	// NewHostNotificationExecution queues a notification for delivery to a host.
+	NewHostNotificationExecution(ctx context.Context, request *HostNotificationRequestPayload) (string, error)
+
+	// SetHostNotificationResult records the result of a notification delivery.
+	SetHostNotificationResult(ctx context.Context, result *HostNotificationResultPayload) error
+
+	// ListPendingNotificationsForHost returns notification IDs pending delivery for a host.
+	ListPendingNotificationsForHost(ctx context.Context, hostID uint) ([]string, error)
+
+	// GetPoliciesWithAssociatedNotification returns policies that have a notification_db_id set for the given team.
+	GetPoliciesWithAssociatedNotification(ctx context.Context, teamID *uint) ([]PolicyNotificationData, error)
+
 	// BatchExecuteScript queues a script to run on a set of hosts and returns the batch script
 	// execution ID.
 	BatchExecuteScript(ctx context.Context, userID *uint, scriptID uint, hostIDs []uint) (string, error)

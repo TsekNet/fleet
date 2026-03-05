@@ -1159,6 +1159,10 @@ func (svc *Service) SubmitDistributedQueryResults(
 			logging.WithErr(ctx, err)
 		}
 
+		if err := svc.processNotificationsForNewlyFailingPolicies(ctx, host.ID, host.TeamID, policyResults); err != nil {
+			logging.WithErr(ctx, err)
+		}
+
 		if host.Platform == "darwin" {
 			if err := svc.processConditionalAccessForNewlyFailingPolicies(ctx, host.ID, host.TeamID, host.OrbitNodeKey, policyResults); err != nil {
 				logging.WithErr(ctx, err)
@@ -1956,6 +1960,50 @@ func (svc *Service) registerFlippedPolicies(ctx context.Context, hostID uint, ho
 	}
 	for _, policyID := range newPassing {
 		if err := svc.failingPolicySet.RemoveHosts(policyID, []fleet.PolicySetHost{host}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (svc *Service) processNotificationsForNewlyFailingPolicies(
+	ctx context.Context,
+	hostID uint,
+	hostTeamID *uint,
+	policyResults map[uint]*bool,
+) error {
+	policiesWithNotif, err := svc.ds.GetPoliciesWithAssociatedNotification(ctx, hostTeamID)
+	if err != nil {
+		return err
+	}
+	if len(policiesWithNotif) == 0 {
+		return nil
+	}
+
+	newFailing, _, err := svc.ds.FlippingPoliciesForHost(ctx, hostID, policyResults)
+	if err != nil {
+		return err
+	}
+	if len(newFailing) == 0 {
+		return nil
+	}
+
+	failingSet := make(map[uint]bool, len(newFailing))
+	for _, pid := range newFailing {
+		failingSet[pid] = true
+	}
+
+	for _, pn := range policiesWithNotif {
+		if !failingSet[pn.PolicyID] {
+			continue
+		}
+		policyID := pn.PolicyID
+		if _, err := svc.ds.NewHostNotificationExecution(ctx, &fleet.HostNotificationRequestPayload{
+			HostID:           hostID,
+			NotificationDBID: pn.NotificationDBID,
+			NotificationID:   pn.NotificationID,
+			PolicyID:         &policyID,
+		}); err != nil {
 			return err
 		}
 	}

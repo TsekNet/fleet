@@ -1160,6 +1160,40 @@ allow {
 }
 
 ##
+# Custom Notifications
+##
+
+# Global admins, maintainers, and gitops can write notifications.
+allow {
+  object.type == "notification"
+  subject.global_role == [admin, maintainer, gitops][_]
+  action == write
+}
+
+# Global admins, maintainers, technicians, observer_plus and observers can read notifications.
+allow {
+  object.type == "notification"
+  subject.global_role == [admin, maintainer, technician, observer, observer_plus][_]
+  action == read
+}
+
+# Team admin, maintainers, and gitops can write notifications for their teams.
+allow {
+  object.type == "notification"
+  not is_null(object.team_id)
+  team_role(subject, object.team_id) == [admin, maintainer, gitops][_]
+  action == write
+}
+
+# Team admins, maintainers, technicians, observer_plus and observers can read notifications for their teams.
+allow {
+  object.type == "notification"
+  not is_null(object.team_id)
+  team_role(subject, object.team_id) == [admin, maintainer, technician, observer_plus, observer][_]
+  action == read
+}
+
+##
 # Secret variables
 ##
 

@@ -165,6 +165,7 @@ type GitOpsControls struct {
 	EnableDiskEncryption any        `json:"enable_disk_encryption"`
 	RequireBitLockerPIN  any        `json:"windows_require_bitlocker_pin,omitempty"`
 	Scripts              []BaseItem `json:"scripts"`
+	Notifications        []BaseItem `json:"notifications"`
 
 	Defined bool
 }
@@ -175,7 +176,7 @@ func (c GitOpsControls) Set() bool {
 		c.MacOSSetup != nil || c.MacOSMigration != nil ||
 		c.WindowsUpdates != nil || c.WindowsSettings != nil || c.WindowsEnabledAndConfigured != nil ||
 		c.WindowsMigrationEnabled != nil || c.EnableDiskEncryption != nil || len(c.Scripts) > 0 ||
-		c.AndroidEnabledAndConfigured != nil || c.AndroidSettings != nil
+		c.AndroidEnabledAndConfigured != nil || c.AndroidSettings != nil || len(c.Notifications) > 0
 }
 
 type Policy struct {
@@ -185,8 +186,9 @@ type Policy struct {
 
 type GitOpsPolicySpec struct {
 	fleet.PolicySpec
-	RunScript       *PolicyRunScript       `json:"run_script"`
-	InstallSoftware *PolicyInstallSoftware `json:"install_software"`
+	RunScript        *PolicyRunScript        `json:"run_script"`
+	InstallSoftware  *PolicyInstallSoftware  `json:"install_software"`
+	ShowNotification *PolicyShowNotification  `json:"show_notification"`
 	// InstallSoftwareURL is populated after parsing the software installer yaml
 	// referenced by InstallSoftware.PackagePath.
 	InstallSoftwareURL string `json:"-"`
@@ -203,6 +205,10 @@ type PolicyInstallSoftware struct {
 	PackagePath string `json:"package_path"`
 	AppStoreID  string `json:"app_store_id"`
 	HashSHA256  string `json:"hash_sha256"`
+}
+
+type PolicyShowNotification struct {
+	NotificationID string `json:"notification_id"`
 }
 
 type Query struct {
@@ -764,6 +770,12 @@ func parseControls(top map[string]json.RawMessage, result *GitOps, multiError *m
 		multiError = multierror.Append(multiError, fmt.Errorf("failed to parse scripts list in %s: %v", controlsFilePath, err))
 	}
 
+	var notifErrs []error
+	result.Controls.Notifications, notifErrs = resolveNotificationPaths(result.Controls.Notifications, controlsDir, logFn)
+	for _, err := range notifErrs {
+		multiError = multierror.Append(multiError, fmt.Errorf("failed to parse notifications list in %s: %v", controlsFilePath, err))
+	}
+
 	// Find Fleet secrets in scripts.
 	for _, script := range result.Controls.Scripts {
 		fileBytes, err := os.ReadFile(*script.Path)
@@ -1078,6 +1090,16 @@ func flattenBaseItems(input []BaseItem, baseDir string, entityType string, opts 
 func resolveScriptPaths(input []BaseItem, baseDir string, logFn Logf) ([]BaseItem, []error) {
 	return flattenBaseItems(input, baseDir, "script", GlobExpandOptions{
 		AllowedExtensions:      allowedScriptExtensions,
+		RequireUniqueBasenames: true,
+		LogFn:                  logFn,
+	})
+}
+
+var allowedNotificationExtensions = map[string]bool{".yml": true, ".yaml": true, ".json": true}
+
+func resolveNotificationPaths(input []BaseItem, baseDir string, logFn Logf) ([]BaseItem, []error) {
+	return flattenBaseItems(input, baseDir, "notification", GlobExpandOptions{
+		AllowedExtensions:      allowedNotificationExtensions,
 		RequireUniqueBasenames: true,
 		LogFn:                  logFn,
 	})

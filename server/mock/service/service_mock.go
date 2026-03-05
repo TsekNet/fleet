@@ -778,6 +778,12 @@ type GetHostScriptDetailsFunc func(ctx context.Context, hostID uint, opt fleet.L
 
 type BatchSetScriptsFunc func(ctx context.Context, maybeTmID *uint, maybeTmName *string, payloads []fleet.ScriptPayload, dryRun bool) ([]fleet.ScriptResponse, error)
 
+type BatchSetNotificationsFunc func(ctx context.Context, maybeTmID *uint, maybeTmName *string, payloads []fleet.NotificationPayload, dryRun bool) ([]fleet.NotificationResponse, error)
+
+type GetOrbitNotificationConfigFunc func(ctx context.Context, notificationID string) (json.RawMessage, error)
+
+type SaveOrbitNotificationResultFunc func(ctx context.Context, notificationID string, result string, exitCode int) error
+
 type BatchScriptExecuteFunc func(ctx context.Context, scriptID uint, hostIDs []uint, filters *map[string]any, notBefore *time.Time) (string, error)
 
 type BatchScriptExecutionSummaryFunc func(ctx context.Context, batchExecutionID string) (*fleet.BatchActivity, error)
@@ -2025,6 +2031,15 @@ type Service struct {
 
 	BatchSetScriptsFunc        BatchSetScriptsFunc
 	BatchSetScriptsFuncInvoked bool
+
+	BatchSetNotificationsFunc        BatchSetNotificationsFunc
+	BatchSetNotificationsFuncInvoked bool
+
+	GetOrbitNotificationConfigFunc        GetOrbitNotificationConfigFunc
+	GetOrbitNotificationConfigFuncInvoked bool
+
+	SaveOrbitNotificationResultFunc        SaveOrbitNotificationResultFunc
+	SaveOrbitNotificationResultFuncInvoked bool
 
 	BatchScriptExecuteFunc        BatchScriptExecuteFunc
 	BatchScriptExecuteFuncInvoked bool
@@ -4845,6 +4860,27 @@ func (s *Service) BatchSetScripts(ctx context.Context, maybeTmID *uint, maybeTmN
 	s.BatchSetScriptsFuncInvoked = true
 	s.mu.Unlock()
 	return s.BatchSetScriptsFunc(ctx, maybeTmID, maybeTmName, payloads, dryRun)
+}
+
+func (s *Service) BatchSetNotifications(ctx context.Context, maybeTmID *uint, maybeTmName *string, payloads []fleet.NotificationPayload, dryRun bool) ([]fleet.NotificationResponse, error) {
+	s.mu.Lock()
+	s.BatchSetNotificationsFuncInvoked = true
+	s.mu.Unlock()
+	return s.BatchSetNotificationsFunc(ctx, maybeTmID, maybeTmName, payloads, dryRun)
+}
+
+func (s *Service) GetOrbitNotificationConfig(ctx context.Context, notificationID string) (json.RawMessage, error) {
+	s.mu.Lock()
+	s.GetOrbitNotificationConfigFuncInvoked = true
+	s.mu.Unlock()
+	return s.GetOrbitNotificationConfigFunc(ctx, notificationID)
+}
+
+func (s *Service) SaveOrbitNotificationResult(ctx context.Context, notificationID string, result string, exitCode int) error {
+	s.mu.Lock()
+	s.SaveOrbitNotificationResultFuncInvoked = true
+	s.mu.Unlock()
+	return s.SaveOrbitNotificationResultFunc(ctx, notificationID, result, exitCode)
 }
 
 func (s *Service) BatchScriptExecute(ctx context.Context, scriptID uint, hostIDs []uint, filters *map[string]any, notBefore *time.Time) (string, error) {

@@ -652,6 +652,23 @@ func (c *Client) ApplyGroup(
 			teamsScripts["No team"] = noTeamScripts
 		}
 
+		if notifPaths := extractAppCfgNotifications(specs.AppConfig); notifPaths != nil {
+			notifPayloads := make([]fleet.NotificationPayload, len(notifPaths))
+			for i, f := range notifPaths {
+				b, err := os.ReadFile(f)
+				if err != nil {
+					return nil, nil, nil, nil, fmt.Errorf("applying notifications for unassigned hosts: %w", err)
+				}
+				notifPayloads[i] = fleet.NotificationPayload{
+					NotificationID: strings.TrimSuffix(filepath.Base(f), filepath.Ext(f)),
+					Config:         b,
+				}
+			}
+			if _, err := c.ApplyNoTeamNotifications(notifPayloads, opts.ApplySpecOptions); err != nil {
+				return nil, nil, nil, nil, fmt.Errorf("applying notifications for unassigned hosts: %w", err)
+			}
+		}
+
 		rules, err := extractAppCfgYaraRules(specs.AppConfig)
 		if err != nil {
 			return nil, nil, nil, nil, fmt.Errorf("applying yara rules: %w", err)
@@ -1042,6 +1059,25 @@ func (c *Client) ApplyGroup(
 					return nil, nil, nil, nil, fmt.Errorf("applying scripts for fleet %q: %w", tmName, err)
 				}
 				teamsScripts[tmName] = scriptResponses
+			}
+		}
+		if tmNotifPayloads := extractTmSpecsNotifications(specs.Teams); len(tmNotifPayloads) > 0 {
+			for tmName, notifPaths := range tmNotifPayloads {
+				currentTeamName := getTeamName(tmName)
+				payloads := make([]fleet.NotificationPayload, len(notifPaths))
+				for i, f := range notifPaths {
+					b, err := os.ReadFile(f)
+					if err != nil {
+						return nil, nil, nil, nil, fmt.Errorf("applying notifications for fleet %q: %w", tmName, err)
+					}
+					payloads[i] = fleet.NotificationPayload{
+						NotificationID: strings.TrimSuffix(filepath.Base(f), filepath.Ext(f)),
+						Config:         b,
+					}
+				}
+				if _, err := c.ApplyTeamNotifications(currentTeamName, payloads, opts.ApplySpecOptions); err != nil {
+					return nil, nil, nil, nil, fmt.Errorf("applying notifications for fleet %q: %w", tmName, err)
+				}
 			}
 		}
 		if len(tmSoftwarePackagesPayloads) > 0 {
@@ -1512,6 +1548,57 @@ func extractAppCfgScripts(appCfg interface{}) []string {
 	return scriptsStrings
 }
 
+func extractAppCfgNotifications(appCfg interface{}) []string {
+	asMap, ok := appCfg.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	notifs, ok := asMap["notifications"]
+	if !ok {
+		return nil
+	}
+	notifsAny, ok := notifs.([]interface{})
+	if !ok || notifsAny == nil {
+		return []string{}
+	}
+	paths := make([]string, 0, len(notifsAny))
+	for _, v := range notifsAny {
+		s, _ := v.(string)
+		if s != "" {
+			paths = append(paths, s)
+		}
+	}
+	return paths
+}
+
+func extractTmSpecsNotifications(tmSpecs []json.RawMessage) map[string][]string {
+	var m map[string][]string
+	for _, tm := range tmSpecs {
+		var spec struct {
+			Name          string          `json:"name"`
+			Notifications json.RawMessage `json:"notifications"`
+		}
+		if err := json.Unmarshal(tm, &spec); err != nil {
+			continue
+		}
+		spec.Name = norm.NFC.String(spec.Name)
+		if spec.Name != "" && len(spec.Notifications) > 0 {
+			if m == nil {
+				m = make(map[string][]string)
+			}
+			var notifs []string
+			if err := json.Unmarshal(spec.Notifications, &notifs); err != nil {
+				continue
+			}
+			if notifs == nil {
+				notifs = []string{}
+			}
+			m[spec.Name] = notifs
+		}
+	}
+	return m
+}
+
 func extractAppCfgYaraRules(appCfg interface{}) ([]fleet.YaraRuleSpec, error) {
 	asMap, ok := appCfg.(map[string]interface{})
 	if !ok {
@@ -1870,6 +1957,10 @@ func (c *Client) DoGitOps(
 	for i, script := range incoming.Controls.Scripts {
 		scripts[i] = *script.Path
 	}
+	notifications := make([]interface{}, len(incoming.Controls.Notifications))
+	for i, notif := range incoming.Controls.Notifications {
+		notifications[i] = *notif.Path
+	}
 	var mdmAppConfig map[string]interface{}
 	var team map[string]interface{}
 
@@ -2088,6 +2179,7 @@ func (c *Client) DoGitOps(
 		delete(mdmAppConfig, "end_user_license_agreement")
 
 		group.AppConfig.(map[string]interface{})["scripts"] = scripts
+		group.AppConfig.(map[string]interface{})["notifications"] = notifications
 
 		// we want to apply the EULA only for the global settings
 		if appConfig.License.IsPremium() && appConfig.MDM.EnabledAndConfigured {
@@ -2111,6 +2203,7 @@ func (c *Client) DoGitOps(
 			team["features"] = features
 		}
 		team["scripts"] = scripts
+		team["notifications"] = notifications
 		team["software"] = map[string]any{}
 		team["software"].(map[string]any)["app_store_apps"] = incoming.Software.AppStoreApps
 		team["software"].(map[string]any)["packages"] = incoming.Software.Packages

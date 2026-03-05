@@ -430,6 +430,14 @@ func (svc *Service) GetOrbitConfig(ctx context.Context) (fleet.OrbitConfig, erro
 		notifs.PendingSoftwareInstallerIDs = pendingInstalls
 	}
 
+	pendingNotifications, err := svc.ds.ListPendingNotificationsForHost(ctx, host.ID)
+	if err != nil {
+		return fleet.OrbitConfig{}, err
+	}
+	if len(pendingNotifications) > 0 {
+		notifs.PendingNotificationIDs = pendingNotifications
+	}
+
 	// team ID is not nil, get team specific flags and options
 	if host.TeamID != nil {
 		teamAgentOptions, err := svc.ds.TeamAgentOptions(ctx, *host.TeamID)
