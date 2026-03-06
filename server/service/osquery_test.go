@@ -3359,6 +3359,9 @@ func TestPolicyQueries(t *testing.T) {
 	) {
 		return nil, nil, nil
 	}
+	ds.GetPoliciesWithAssociatedNotificationFunc = func(ctx context.Context, teamID *uint) ([]fleet.PolicyNotificationData, error) {
+		return nil, nil
+	}
 	ds.TeamLiteFunc = func(ctx context.Context, id uint) (*fleet.TeamLite, error) {
 		return &fleet.TeamLite{ID: 0}, nil
 	}
@@ -3698,6 +3701,9 @@ func TestPolicyWebhooks(t *testing.T) {
 		err error,
 	) {
 		return []uint{3}, nil, nil
+	}
+	ds.GetPoliciesWithAssociatedNotificationFunc = func(ctx context.Context, teamID *uint) ([]fleet.PolicyNotificationData, error) {
+		return nil, nil
 	}
 
 	// Record a query execution.

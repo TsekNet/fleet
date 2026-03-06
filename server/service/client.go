@@ -653,16 +653,9 @@ func (c *Client) ApplyGroup(
 		}
 
 		if notifPaths := extractAppCfgNotifications(specs.AppConfig); notifPaths != nil {
-			notifPayloads := make([]fleet.NotificationPayload, len(notifPaths))
-			for i, f := range notifPaths {
-				b, err := os.ReadFile(f)
-				if err != nil {
-					return nil, nil, nil, nil, fmt.Errorf("applying notifications for unassigned hosts: %w", err)
-				}
-				notifPayloads[i] = fleet.NotificationPayload{
-					NotificationID: strings.TrimSuffix(filepath.Base(f), filepath.Ext(f)),
-					Config:         b,
-				}
+			notifPayloads, err := readNotificationPayloads(notifPaths, baseDir)
+			if err != nil {
+				return nil, nil, nil, nil, fmt.Errorf("applying notifications for unassigned hosts: %w", err)
 			}
 			if _, err := c.ApplyNoTeamNotifications(notifPayloads, opts.ApplySpecOptions); err != nil {
 				return nil, nil, nil, nil, fmt.Errorf("applying notifications for unassigned hosts: %w", err)
@@ -1064,16 +1057,9 @@ func (c *Client) ApplyGroup(
 		if tmNotifPayloads := extractTmSpecsNotifications(specs.Teams); len(tmNotifPayloads) > 0 {
 			for tmName, notifPaths := range tmNotifPayloads {
 				currentTeamName := getTeamName(tmName)
-				payloads := make([]fleet.NotificationPayload, len(notifPaths))
-				for i, f := range notifPaths {
-					b, err := os.ReadFile(f)
-					if err != nil {
-						return nil, nil, nil, nil, fmt.Errorf("applying notifications for fleet %q: %w", tmName, err)
-					}
-					payloads[i] = fleet.NotificationPayload{
-						NotificationID: strings.TrimSuffix(filepath.Base(f), filepath.Ext(f)),
-						Config:         b,
-					}
+				payloads, err := readNotificationPayloads(notifPaths, baseDir)
+				if err != nil {
+					return nil, nil, nil, nil, fmt.Errorf("applying notifications for fleet %q: %w", tmName, err)
 				}
 				if _, err := c.ApplyTeamNotifications(currentTeamName, payloads, opts.ApplySpecOptions); err != nil {
 					return nil, nil, nil, nil, fmt.Errorf("applying notifications for fleet %q: %w", tmName, err)
@@ -1548,55 +1534,114 @@ func extractAppCfgScripts(appCfg interface{}) []string {
 	return scriptsStrings
 }
 
-func extractAppCfgNotifications(appCfg interface{}) []string {
+func extractAppCfgStringSlice(appCfg interface{}, key string) []string {
 	asMap, ok := appCfg.(map[string]interface{})
 	if !ok {
 		return nil
 	}
-	notifs, ok := asMap["notifications"]
+	raw, ok := asMap[key]
 	if !ok {
 		return nil
 	}
-	notifsAny, ok := notifs.([]interface{})
-	if !ok || notifsAny == nil {
+	items, ok := raw.([]interface{})
+	if !ok || items == nil {
 		return []string{}
 	}
-	paths := make([]string, 0, len(notifsAny))
-	for _, v := range notifsAny {
+	out := make([]string, 0, len(items))
+	for _, v := range items {
 		s, _ := v.(string)
 		if s != "" {
-			paths = append(paths, s)
+			out = append(out, s)
 		}
 	}
-	return paths
+	return out
+}
+
+func extractTmSpecsStringSlice(tmSpecs []json.RawMessage, key string) map[string][]string {
+	var m map[string][]string
+	for _, tm := range tmSpecs {
+		var raw map[string]json.RawMessage
+		if err := json.Unmarshal(tm, &raw); err != nil {
+			continue
+		}
+		var name string
+		if err := json.Unmarshal(raw["name"], &name); err != nil {
+			continue
+		}
+		name = norm.NFC.String(name)
+		data, ok := raw[key]
+		if name == "" || !ok || len(data) == 0 {
+			continue
+		}
+		if m == nil {
+			m = make(map[string][]string)
+		}
+		var vals []string
+		if err := json.Unmarshal(data, &vals); err != nil {
+			continue
+		}
+		filtered := make([]string, 0, len(vals))
+		for _, v := range vals {
+			if v != "" {
+				filtered = append(filtered, v)
+			}
+		}
+		m[name] = filtered
+	}
+	return m
+}
+
+func extractAppCfgNotifications(appCfg interface{}) []string {
+	return extractAppCfgStringSlice(appCfg, "notifications")
 }
 
 func extractTmSpecsNotifications(tmSpecs []json.RawMessage) map[string][]string {
-	var m map[string][]string
-	for _, tm := range tmSpecs {
-		var spec struct {
-			Name          string          `json:"name"`
-			Notifications json.RawMessage `json:"notifications"`
+	return extractTmSpecsStringSlice(tmSpecs, "notifications")
+}
+
+func readNotificationPayloads(paths []string, baseDir string) ([]fleet.NotificationPayload, error) {
+	resolved := resolveApplyRelativePaths(baseDir, paths)
+	payloads := make([]fleet.NotificationPayload, len(resolved))
+	for i, f := range resolved {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			return nil, fmt.Errorf("read notification %s: %w", filepath.Base(f), err)
 		}
-		if err := json.Unmarshal(tm, &spec); err != nil {
-			continue
+		ext := strings.ToLower(filepath.Ext(f))
+		if ext == ".yml" || ext == ".yaml" {
+			var raw interface{}
+			if err := yaml.Unmarshal(b, &raw); err != nil {
+				return nil, fmt.Errorf("parse YAML notification %s: %w", filepath.Base(f), err)
+			}
+			b, err = json.Marshal(yamlToJSON(raw))
+			if err != nil {
+				return nil, fmt.Errorf("convert notification %s to JSON: %w", filepath.Base(f), err)
+			}
 		}
-		spec.Name = norm.NFC.String(spec.Name)
-		if spec.Name != "" && len(spec.Notifications) > 0 {
-			if m == nil {
-				m = make(map[string][]string)
-			}
-			var notifs []string
-			if err := json.Unmarshal(spec.Notifications, &notifs); err != nil {
-				continue
-			}
-			if notifs == nil {
-				notifs = []string{}
-			}
-			m[spec.Name] = notifs
+		payloads[i] = fleet.NotificationPayload{
+			NotificationID: strings.TrimSuffix(filepath.Base(f), filepath.Ext(f)),
+			Config:         b,
 		}
 	}
-	return m
+	return payloads, nil
+}
+
+func yamlToJSON(v interface{}) interface{} {
+	switch val := v.(type) {
+	case map[interface{}]interface{}:
+		m := make(map[string]interface{}, len(val))
+		for k, v := range val {
+			m[fmt.Sprintf("%v", k)] = yamlToJSON(v)
+		}
+		return m
+	case []interface{}:
+		for i, item := range val {
+			val[i] = yamlToJSON(item)
+		}
+		return val
+	default:
+		return v
+	}
 }
 
 func extractAppCfgYaraRules(appCfg interface{}) ([]fleet.YaraRuleSpec, error) {
@@ -1957,9 +2002,11 @@ func (c *Client) DoGitOps(
 	for i, script := range incoming.Controls.Scripts {
 		scripts[i] = *script.Path
 	}
-	notifications := make([]interface{}, len(incoming.Controls.Notifications))
-	for i, notif := range incoming.Controls.Notifications {
-		notifications[i] = *notif.Path
+	notifications := make([]interface{}, 0, len(incoming.Controls.Notifications))
+	for _, notif := range incoming.Controls.Notifications {
+		if notif.Path != nil {
+			notifications = append(notifications, *notif.Path)
+		}
 	}
 	var mdmAppConfig map[string]interface{}
 	var team map[string]interface{}

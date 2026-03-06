@@ -681,6 +681,8 @@ type AppConfig struct {
 	// (The source of truth for scripts is in MySQL.)
 	Scripts optjson.Slice[string] `json:"scripts"`
 
+	Notifications optjson.Slice[string] `json:"notifications"`
+
 	YaraRules []YaraRule `json:"yara_rules,omitempty"`
 
 	// ConditionalAccess holds the Okta conditional access settings that are stored in AppConfig.

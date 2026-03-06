@@ -58,6 +58,9 @@ func TestGetOrbitConfigLinuxEscrow(t *testing.T) {
 		ds.ListReadyToExecuteSoftwareInstallsFunc = func(ctx context.Context, hostID uint) ([]string, error) {
 			return nil, nil
 		}
+		ds.ListPendingNotificationsForHostFunc = func(ctx context.Context, hostID uint) ([]string, error) {
+			return nil, nil
+		}
 		ds.IsHostConnectedToFleetMDMFunc = func(ctx context.Context, host *fleet.Host) (bool, error) {
 			return true, nil
 		}
@@ -116,6 +119,9 @@ func TestGetOrbitConfigLinuxEscrow(t *testing.T) {
 			return nil, nil
 		}
 		ds.ListReadyToExecuteSoftwareInstallsFunc = func(ctx context.Context, hostID uint) ([]string, error) {
+			return nil, nil
+		}
+		ds.ListPendingNotificationsForHostFunc = func(ctx context.Context, hostID uint) ([]string, error) {
 			return nil, nil
 		}
 		ds.IsHostConnectedToFleetMDMFunc = func(ctx context.Context, host *fleet.Host) (bool, error) {
@@ -330,6 +336,9 @@ func TestGetOrbitConfigNudge(t *testing.T) {
 		ds.ListReadyToExecuteSoftwareInstallsFunc = func(ctx context.Context, hostID uint) ([]string, error) {
 			return nil, nil
 		}
+		ds.ListPendingNotificationsForHostFunc = func(ctx context.Context, hostID uint) ([]string, error) {
+			return nil, nil
+		}
 		ds.IsHostConnectedToFleetMDMFunc = func(ctx context.Context, host *fleet.Host) (bool, error) {
 			return true, nil
 		}
@@ -394,6 +403,9 @@ func TestGetOrbitConfigNudge(t *testing.T) {
 			return os, nil
 		}
 		ds.ListReadyToExecuteSoftwareInstallsFunc = func(ctx context.Context, hostID uint) ([]string, error) {
+			return nil, nil
+		}
+		ds.ListPendingNotificationsForHostFunc = func(ctx context.Context, hostID uint) ([]string, error) {
 			return nil, nil
 		}
 		team := fleet.Team{ID: 1}
@@ -496,6 +508,9 @@ func TestGetOrbitConfigNudge(t *testing.T) {
 		ds.ListReadyToExecuteSoftwareInstallsFunc = func(ctx context.Context, hostID uint) ([]string, error) {
 			return nil, nil
 		}
+		ds.ListPendingNotificationsForHostFunc = func(ctx context.Context, hostID uint) ([]string, error) {
+			return nil, nil
+		}
 		ds.GetHostMDMFunc = func(ctx context.Context, hostID uint) (*fleet.HostMDM, error) {
 			return nil, sql.ErrNoRows
 		}
@@ -573,6 +588,9 @@ func TestGetOrbitConfigNudge(t *testing.T) {
 			return nil, nil
 		}
 		ds.ListReadyToExecuteSoftwareInstallsFunc = func(ctx context.Context, hostID uint) ([]string, error) {
+			return nil, nil
+		}
+		ds.ListPendingNotificationsForHostFunc = func(ctx context.Context, hostID uint) ([]string, error) {
 			return nil, nil
 		}
 		ds.IsHostConnectedToFleetMDMFunc = func(ctx context.Context, host *fleet.Host) (bool, error) {

@@ -8,15 +8,13 @@ import (
 
 	"github.com/fleetdm/fleet/v4/server/contexts/ctxerr"
 	"github.com/fleetdm/fleet/v4/server/fleet"
+	"github.com/fleetdm/fleet/v4/server/ptr"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 )
 
 func (ds *Datastore) BatchSetNotifications(ctx context.Context, tmID *uint, payloads []*fleet.NotificationPayload) ([]fleet.NotificationResponse, error) {
-	globalOrTeamID := uint(0)
-	if tmID != nil {
-		globalOrTeamID = *tmID
-	}
+	globalOrTeamID := ptr.ValOrZero(tmID)
 
 	var results []fleet.NotificationResponse
 	err := ds.withRetryTxx(ctx, func(tx sqlx.ExtContext) error {
@@ -59,7 +57,10 @@ func (ds *Datastore) BatchSetNotifications(ctx context.Context, tmID *uint, payl
 			if err != nil {
 				return ctxerr.Wrap(ctx, err, "insert notification contents")
 			}
-			contentID, _ := res.LastInsertId()
+			contentID, err := res.LastInsertId()
+			if err != nil {
+				return ctxerr.Wrap(ctx, err, "get notification content id")
+			}
 
 			const insNotif = `INSERT INTO notifications (team_id, global_or_team_id, notification_id, notification_content_id)
 				VALUES (?, ?, ?, ?)
@@ -79,16 +80,22 @@ func (ds *Datastore) BatchSetNotifications(ctx context.Context, tmID *uint, payl
 }
 
 func (ds *Datastore) GetNotificationByNotificationID(ctx context.Context, notificationID string, teamID *uint) (*fleet.Notification, error) {
-	globalOrTeamID := uint(0)
-	if teamID != nil {
-		globalOrTeamID = *teamID
-	}
+	globalOrTeamID := ptr.ValOrZero(teamID)
 
 	var n fleet.Notification
-	err := sqlx.GetContext(ctx, ds.reader(ctx), &n,
-		`SELECT id, team_id, notification_id, notification_content_id, created_at, updated_at
-		FROM notifications WHERE global_or_team_id = ? AND notification_id = ?`,
-		globalOrTeamID, notificationID)
+	var err error
+	if teamID != nil {
+		err = sqlx.GetContext(ctx, ds.reader(ctx), &n,
+			`SELECT id, team_id, notification_id, notification_content_id, created_at, updated_at
+			FROM notifications WHERE notification_id = ? AND (global_or_team_id = ? OR global_or_team_id = 0)
+			ORDER BY global_or_team_id DESC LIMIT 1`,
+			notificationID, globalOrTeamID)
+	} else {
+		err = sqlx.GetContext(ctx, ds.reader(ctx), &n,
+			`SELECT id, team_id, notification_id, notification_content_id, created_at, updated_at
+			FROM notifications WHERE global_or_team_id = 0 AND notification_id = ?`,
+			notificationID)
+	}
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, ctxerr.Wrap(ctx, notFound("Notification").WithName(notificationID), "get notification")
@@ -123,7 +130,10 @@ func (ds *Datastore) NewHostNotificationExecution(ctx context.Context, request *
 		if err != nil {
 			return ctxerr.Wrap(ctx, err, "insert notification upcoming activity")
 		}
-		activityID, _ := result.LastInsertId()
+		activityID, err := result.LastInsertId()
+		if err != nil {
+			return ctxerr.Wrap(ctx, err, "get notification activity id")
+		}
 
 		const insNUA = `INSERT INTO notification_upcoming_activities
 			(upcoming_activity_id, notification_db_id, policy_id) VALUES (?, ?, ?)`
@@ -141,22 +151,30 @@ func (ds *Datastore) NewHostNotificationExecution(ctx context.Context, request *
 }
 
 func (ds *Datastore) SetHostNotificationResult(ctx context.Context, result *fleet.HostNotificationResultPayload) error {
-	const stmt = `UPDATE host_notification_results
-		SET result = ?, exit_code = ?
-		WHERE host_id = ? AND notification_id = ? AND result = ''
-		ORDER BY created_at DESC LIMIT 1`
+	return ds.withRetryTxx(ctx, func(tx sqlx.ExtContext) error {
+		const findStmt = `SELECT id FROM host_notification_results
+			WHERE host_id = ? AND notification_id = ? AND result = ''
+			ORDER BY created_at ASC LIMIT 1
+			FOR UPDATE`
 
-	res, err := ds.writer(ctx).ExecContext(ctx, stmt,
-		result.Result, result.ExitCode, result.HostID, result.NotificationID)
-	if err != nil {
-		return ctxerr.Wrap(ctx, err, "set host notification result")
-	}
-	rows, _ := res.RowsAffected()
-	if rows == 0 {
-		return ctxerr.Wrap(ctx, notFound("HostNotificationResult"), "no pending notification result found")
-	}
+		var rowID uint
+		if err := sqlx.GetContext(ctx, tx, &rowID, findStmt,
+			result.HostID, result.NotificationID); err != nil {
+			if err == sql.ErrNoRows {
+				return ctxerr.Wrap(ctx, notFound("HostNotificationResult"), "no pending notification result found")
+			}
+			return ctxerr.Wrap(ctx, err, "find pending notification result")
+		}
 
-	return nil
+		const updateStmt = `UPDATE host_notification_results
+			SET result = ?, exit_code = ? WHERE id = ?`
+		if _, err := tx.ExecContext(ctx, updateStmt,
+			result.Result, result.ExitCode, rowID); err != nil {
+			return ctxerr.Wrap(ctx, err, "set host notification result")
+		}
+
+		return nil
+	})
 }
 
 func (ds *Datastore) ListPendingNotificationsForHost(ctx context.Context, hostID uint) ([]string, error) {

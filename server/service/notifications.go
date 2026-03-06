@@ -3,21 +3,26 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"regexp"
 
 	"github.com/fleetdm/fleet/v4/server/contexts/ctxerr"
 	hostctx "github.com/fleetdm/fleet/v4/server/contexts/host"
 	"github.com/fleetdm/fleet/v4/server/fleet"
 )
 
+const maxNotificationConfigSize = 64 * 1024 // 64 KiB
+
+var validNotificationID = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,254}$`)
+
 ////////////////////////////////////////////////////////////////////////////////
 // Batch Set Notifications (user-authenticated, for GitOps)
 ////////////////////////////////////////////////////////////////////////////////
 
 type batchSetNotificationsRequest struct {
-	TeamID        *uint                        `json:"-" query:"team_id,optional"`
-	TeamName      *string                      `json:"-" query:"team_name,optional"`
-	DryRun        bool                         `json:"-" query:"dry_run,optional"`
-	Notifications []fleet.NotificationPayload  `json:"notifications"`
+	TeamID        *uint                       `json:"-" query:"team_id,optional"`
+	TeamName      *string                     `json:"-" query:"team_name,optional"`
+	DryRun        bool                        `json:"-" query:"dry_run,optional"`
+	Notifications []fleet.NotificationPayload `json:"notifications"`
 }
 
 type batchSetNotificationsResponse struct {
@@ -58,6 +63,30 @@ func (svc *Service) BatchSetNotifications(ctx context.Context, maybeTmID *uint, 
 
 	if err := svc.authz.Authorize(ctx, &fleet.Notification{TeamID: teamID}, fleet.ActionWrite); err != nil {
 		return nil, ctxerr.Wrap(ctx, err)
+	}
+
+	for _, p := range payloads {
+		if !validNotificationID.MatchString(p.NotificationID) {
+			return nil, ctxerr.Wrap(ctx, fleet.NewInvalidArgumentError(
+				"notification_id",
+				"must be 1-255 alphanumeric characters, dots, hyphens, or underscores",
+			))
+		}
+		if len(p.Config) == 0 {
+			return nil, ctxerr.Wrap(ctx, fleet.NewInvalidArgumentError(
+				"config", "notification config must not be empty",
+			))
+		}
+		if len(p.Config) > maxNotificationConfigSize {
+			return nil, ctxerr.Wrap(ctx, fleet.NewInvalidArgumentError(
+				"config", "notification config exceeds 64 KiB limit",
+			))
+		}
+		if !json.Valid(p.Config) {
+			return nil, ctxerr.Wrap(ctx, fleet.NewInvalidArgumentError(
+				"config", "notification config must be valid JSON",
+			))
+		}
 	}
 
 	if dryRun {
@@ -106,6 +135,10 @@ func getOrbitNotificationConfigEndpoint(ctx context.Context, request interface{}
 
 func (svc *Service) GetOrbitNotificationConfig(ctx context.Context, notificationID string) (json.RawMessage, error) {
 	svc.authz.SkipAuthorization(ctx)
+
+	if !validNotificationID.MatchString(notificationID) {
+		return nil, fleet.NewInvalidArgumentError("notification_id", "invalid notification_id format")
+	}
 
 	host, ok := hostctx.FromContext(ctx)
 	if !ok {
@@ -160,6 +193,15 @@ func postOrbitNotificationResultEndpoint(ctx context.Context, request interface{
 
 func (svc *Service) SaveOrbitNotificationResult(ctx context.Context, notificationID string, result string, exitCode int) error {
 	svc.authz.SkipAuthorization(ctx)
+
+	if !validNotificationID.MatchString(notificationID) {
+		return fleet.NewInvalidArgumentError("notification_id", "invalid notification_id format")
+	}
+
+	const maxResultLen = 255
+	if len(result) > maxResultLen {
+		return fleet.NewInvalidArgumentError("result", "result exceeds maximum length")
+	}
 
 	host, ok := hostctx.FromContext(ctx)
 	if !ok {
